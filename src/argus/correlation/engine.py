@@ -150,7 +150,7 @@ _COMPOUND_PATTERNS: list[dict[str, Any]] = [
     },
     {
         "id": "cross_agent_exfil_model_extraction",
-        "required_agents": {"cross_agent_exfil", "model_extraction"},
+        "required_agents": {"cross_agent_exfiltration", "model_extraction"},
         "require_marker_leak": True,
         "title": ("Compound: cross_agent_exfil relays extracted model configuration"),
         "compound_impact": (
@@ -197,7 +197,7 @@ _COMPOUND_PATTERNS: list[dict[str, Any]] = [
     },
     {
         "id": "context_window_cross_agent_exfil",
-        "required_agents": {"context_window", "cross_agent_exfil"},
+        "required_agents": {"context_window", "cross_agent_exfiltration"},
         "require_marker_leak": True,
         "title": ("Compound: context_window pollution enables cross_agent data exfiltration"),
         "compound_impact": (

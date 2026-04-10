@@ -102,7 +102,7 @@ async def test_correlation_emits_cross_agent_exfil_model_extraction():
     """Cross-agent exfil + model extraction fires when marker evidence present."""
     findings = [
         _make_finding(
-            agent_type="cross_agent_exfil",
+            agent_type="cross_agent_exfiltration",
             title="Cross-agent relay via shared memory",
             technique="relay_shared_memory",
             target_surface="http://target.test:8001",
@@ -127,7 +127,7 @@ async def test_correlation_skips_cross_agent_exfil_model_extraction_without_mark
     """Cross-agent exfil + model extraction does NOT fire without marker evidence."""
     findings = [
         _make_finding(
-            agent_type="cross_agent_exfil",
+            agent_type="cross_agent_exfiltration",
             title="Cross-agent relay attempt",
             technique="relay_shared_memory",
             target_surface="http://target.test:8001",
@@ -245,7 +245,7 @@ async def test_correlation_emits_context_window_cross_agent_exfil():
             raw_response="canary leak detected in context",
         ),
         _make_finding(
-            agent_type="cross_agent_exfil",
+            agent_type="cross_agent_exfiltration",
             title="Data relay via polluted context",
             technique="context_relay_exfil",
             target_surface="http://target.test:8001",
@@ -270,7 +270,7 @@ async def test_correlation_skips_context_window_cross_agent_exfil_without_marker
             raw_response="no evidence",
         ),
         _make_finding(
-            agent_type="cross_agent_exfil",
+            agent_type="cross_agent_exfiltration",
             title="Relay attempt",
             technique="relay_attempt",
             target_surface="http://target.test:8001",
