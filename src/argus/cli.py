@@ -31,6 +31,7 @@ from argus.agents import (
 from argus.corpus.manager import AttackCorpus
 from argus.models.agents import AgentType, TargetConfig
 from argus.orchestrator.engine import Orchestrator
+from argus.reporting.alec_export import ALECEvidenceExporter
 from argus.reporting.renderer import ReportRenderer
 
 
@@ -298,6 +299,56 @@ def scan(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(renderer.render_json(result))
         console.print(f"\n[green]Full report written to {output_path}[/]")
+
+
+@main.command(name="alec-export")
+@click.argument("target_name")
+@click.option("--mcp-url", multiple=True, help="MCP server URL(s) to test")
+@click.option("--agent-endpoint", help="Target agent endpoint URL")
+@click.option("--timeout", default=600, help="Scan timeout in seconds")
+@click.option("--output", "-o", required=True, help="Output file path for ALEC evidence package")
+def alec_export(
+    target_name: str,
+    mcp_url: tuple[str, ...],
+    agent_endpoint: str | None,
+    timeout: int,
+    output: str,
+) -> None:
+    """Run a scan and export an ALEC evidence package.
+
+    Produces a structured evidence package compatible with ALEC
+    (Autonomous Legal Evidence Chain) for legal-grade incident
+    documentation. Includes SHA-256 integrity hashes, chain-of-custody
+    metadata, and CERBERUS cross-references.
+    """
+    for url in mcp_url:
+        _validate_url(url)
+    if agent_endpoint:
+        _validate_url(agent_endpoint)
+
+    output_path = _validate_output_path(output)
+
+    console.print(BANNER, style="bold red")
+    console.print("\n[bold]ALEC Evidence Export[/]")
+    console.print(f"[bold]Target:[/] {target_name}")
+    console.print(f"[bold]Output:[/] {output_path}\n")
+
+    target = TargetConfig(
+        name=target_name,
+        mcp_server_urls=list(mcp_url),
+        agent_endpoint=agent_endpoint,
+    )
+
+    orchestrator = _create_orchestrator()
+    result = asyncio.run(orchestrator.run_scan(target=target, timeout=timeout))
+
+    exporter = ALECEvidenceExporter()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(exporter.export_json(result))
+
+    console.print(f"\n[green]ALEC evidence package written to {output_path}[/]")
+    console.print(f"[dim]Validated findings: {len(result.validated_findings)}[/]")
+    console.print(f"[dim]Compound paths: {len(result.compound_paths)}[/]")
 
 
 @main.command()

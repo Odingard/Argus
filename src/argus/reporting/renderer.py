@@ -11,7 +11,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from argus.models.findings import Finding, FindingSeverity
+from argus.models.findings import CompoundAttackPath, Finding, FindingSeverity
 from argus.orchestrator.engine import ScanResult
 from argus.reporting.cerberus_rules import CerberusRuleGenerator
 
@@ -60,6 +60,8 @@ class ReportRenderer:
                         lines.append(f"      Agent: {f.agent_type} | Surface: {f.target_surface}")
                         if f.owasp_agentic:
                             lines.append(f"      OWASP: {f.owasp_agentic.value}")
+                        if f.remediation:
+                            lines.append(f"      Fix: {f.remediation.summary}")
 
         # CERBERUS detection rules
         cerberus_gen = CerberusRuleGenerator()
@@ -84,6 +86,11 @@ class ReportRenderer:
                 lines.append(f"    Impact: {path.compound_impact}")
                 lines.append(f"    Steps: {len(path.attack_path_steps)}")
                 lines.append(f"    Exploitability: {path.exploitability_score}/10")
+                if path.owasp_agentic:
+                    owasp_vals = [cat.value for cat in path.owasp_agentic]
+                    lines.append(f"    OWASP: {', '.join(owasp_vals)}")
+                if path.remediation:
+                    lines.append(f"    Remediation: {path.remediation.summary}")
 
         lines.append("\n" + "=" * 70)
         lines.append("  ARGUS — Odingard Security — Six Sense Enterprise Services")
@@ -97,6 +104,9 @@ class ReportRenderer:
         cerberus_rules = cerberus_gen.generate_rules(scan_result.validated_findings)
         ruleset = cerberus_gen.export_ruleset(cerberus_rules)
 
+        # Generate CERBERUS rules for compound attack paths
+        compound_cerberus = self._compound_path_cerberus_rules(scan_result.compound_paths, cerberus_gen)
+
         return {
             "argus_version": "0.1.0",
             "report_generated": datetime.now(UTC).isoformat(),
@@ -105,6 +115,7 @@ class ReportRenderer:
             "compound_attack_paths": [p.model_dump() for p in scan_result.compound_paths],
             "agent_results": [r.model_dump() for r in scan_result.agent_results],
             "cerberus_rules": ruleset,
+            "cerberus_compound_rules": compound_cerberus,
         }
 
     def _group_by_severity(self, findings: list[Finding]) -> dict[FindingSeverity, list[Finding]]:
@@ -112,3 +123,48 @@ class ReportRenderer:
         for f in findings:
             groups.setdefault(f.severity, []).append(f)
         return groups
+
+    @staticmethod
+    def _compound_path_cerberus_rules(
+        compound_paths: list[CompoundAttackPath],
+        cerberus_gen: CerberusRuleGenerator,
+    ) -> list[dict[str, Any]]:
+        """Generate CERBERUS detection rules for compound attack paths.
+
+        Each compound path gets a chain-level detection rule that monitors
+        for the specific sequence of attack stages.
+        """
+        from argus.models.findings import CerberusRule
+
+        rules: list[CerberusRule] = []
+        for i, path in enumerate(compound_paths):
+            owasp_vals = [cat.value for cat in path.owasp_agentic] if path.owasp_agentic else []
+            agents_involved = sorted({step.agent_type for step in path.attack_path_steps})
+            techniques = [step.technique for step in path.attack_path_steps]
+
+            rule = CerberusRule(
+                rule_id=f"CERB-CP-{i + 1:03d}",
+                title=f"Detect compound: {path.title[:80]}",
+                description=(f"Chain-level detection for compound attack path: {path.compound_impact[:200]}"),
+                severity=path.severity.value.upper(),
+                agent_source="correlation_engine",
+                detection_logic=(
+                    f"Monitor for sequential attack pattern across agents: "
+                    f"{' -> '.join(agents_involved)}. "
+                    f"Alert when techniques {', '.join(techniques[:5])} are observed "
+                    f"targeting the same system within a short time window."
+                ),
+                indicators=[
+                    f"Stage {step.step_number}: {step.technique} ({step.agent_type})" for step in path.attack_path_steps
+                ],
+                owasp_mapping=", ".join(owasp_vals) if owasp_vals else "",
+                finding_id=path.id,
+                recommended_action=(
+                    path.remediation.summary
+                    if path.remediation
+                    else "Break the attack chain at the earliest detectable stage."
+                ),
+            )
+            rules.append(rule)
+
+        return [r.model_dump() for r in rules]
