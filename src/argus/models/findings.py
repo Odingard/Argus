@@ -1,0 +1,175 @@
+"""Finding schema — structured output for ARGUS attack results.
+
+Every finding includes: attack chain, reproduction steps, OWASP mapping,
+severity, validation status, and CERBERUS detection rule recommendations.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+
+class FindingSeverity(str, Enum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+
+class FindingStatus(str, Enum):
+    UNVALIDATED = "unvalidated"
+    VALIDATED = "validated"
+    FALSE_POSITIVE = "false_positive"
+    PARTIALLY_VALIDATED = "partially_validated"
+
+
+class OWASPAgenticCategory(str, Enum):
+    """OWASP Agentic AI Top 10 mapping."""
+    PROMPT_INJECTION = "AA01:2025 — Agentic Prompt Injection"
+    TOOL_MISUSE = "AA02:2025 — Tool Misuse and Manipulation"
+    PRIVILEGE_ESCALATION = "AA03:2025 — Privilege Escalation via Agent Chaining"
+    IDENTITY_SPOOFING = "AA04:2025 — Agent Identity Spoofing"
+    MEMORY_POISONING = "AA05:2025 — Memory and Context Manipulation"
+    CROSS_AGENT_EXFIL = "AA06:2025 — Cross-Agent Data Exfiltration"
+    SUPPLY_CHAIN = "AA07:2025 — Supply Chain and Tool Dependency Attacks"
+    RACE_CONDITIONS = "AA08:2025 — Race Conditions in Multi-Agent Systems"
+    MODEL_EXTRACTION = "AA09:2025 — Model and Configuration Extraction"
+    INSUFFICIENT_MONITORING = "AA10:2025 — Insufficient Agent Monitoring"
+
+
+class OWASPLLMCategory(str, Enum):
+    """OWASP LLM Top 10 mapping."""
+    PROMPT_INJECTION = "LLM01 — Prompt Injection"
+    INSECURE_OUTPUT = "LLM02 — Insecure Output Handling"
+    TRAINING_DATA_POISONING = "LLM03 — Training Data Poisoning"
+    MODEL_DOS = "LLM04 — Model Denial of Service"
+    SUPPLY_CHAIN = "LLM05 — Supply Chain Vulnerabilities"
+    SENSITIVE_DISCLOSURE = "LLM06 — Sensitive Information Disclosure"
+    INSECURE_PLUGIN = "LLM07 — Insecure Plugin Design"
+    EXCESSIVE_AGENCY = "LLM08 — Excessive Agency"
+    OVERRELIANCE = "LLM09 — Overreliance"
+    MODEL_THEFT = "LLM10 — Model Theft"
+
+
+class ReproductionStep(BaseModel):
+    """A single step in reproducing a finding."""
+    step_number: int
+    action: str
+    input_data: Optional[str] = None
+    expected_result: str
+    actual_result: Optional[str] = None
+
+
+class AttackChainStep(BaseModel):
+    """A single step in a multi-step attack chain."""
+    step_number: int
+    agent_type: str
+    technique: str
+    description: str
+    input_payload: Optional[str] = None
+    output_observed: Optional[str] = None
+    target_surface: str
+
+
+class ValidationResult(BaseModel):
+    """Result of deterministic validation of a finding."""
+    validated: bool
+    validation_method: str
+    proof_of_exploitation: str
+    reproducible: bool
+    attempts: int = 1
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class RemediationGuidance(BaseModel):
+    """Remediation recommendation for a finding."""
+    summary: str
+    detailed_steps: list[str]
+    cerberus_detection_rule: Optional[str] = None
+    references: list[str] = Field(default_factory=list)
+
+
+class Finding(BaseModel):
+    """A single validated finding from an ARGUS attack agent.
+
+    This is the core output unit. A finding only ships when it has
+    been validated with reproducible proof-of-exploitation.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Source
+    agent_type: str
+    agent_instance_id: str
+    scan_id: str
+
+    # Classification
+    title: str
+    description: str
+    severity: FindingSeverity
+    status: FindingStatus = FindingStatus.UNVALIDATED
+
+    # Attack details
+    target_surface: str
+    technique: str
+    attack_chain: list[AttackChainStep]
+    reproduction_steps: list[ReproductionStep]
+
+    # OWASP mapping
+    owasp_agentic: Optional[OWASPAgenticCategory] = None
+    owasp_llm: Optional[OWASPLLMCategory] = None
+
+    # Validation
+    validation: Optional[ValidationResult] = None
+
+    # Remediation
+    remediation: Optional[RemediationGuidance] = None
+
+    # Raw evidence
+    raw_request: Optional[str] = None
+    raw_response: Optional[str] = None
+
+    def is_validated(self) -> bool:
+        return self.status == FindingStatus.VALIDATED and self.validation is not None and self.validation.validated
+
+
+class CompoundAttackPath(BaseModel):
+    """A multi-step attack path chaining findings from multiple agents.
+
+    Constructed by the Correlation Agent when findings from different
+    attack agents can be combined into a higher-severity exploit chain.
+    """
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    scan_id: str
+
+    title: str
+    description: str
+    severity: FindingSeverity
+
+    # The chain
+    finding_ids: list[str]
+    attack_path_steps: list[AttackChainStep]
+
+    # What this chain achieves that individual findings don't
+    compound_impact: str
+
+    # Scoring
+    exploitability_score: float = Field(ge=0.0, le=10.0)
+    detectability_score: float = Field(ge=0.0, le=10.0, description="Higher = harder to detect")
+
+    # OWASP
+    owasp_agentic: list[OWASPAgenticCategory] = Field(default_factory=list)
+
+    # Validation
+    validation: Optional[ValidationResult] = None
+
+    # Remediation
+    remediation: Optional[RemediationGuidance] = None
+    cerberus_detection_rules: list[str] = Field(default_factory=list)

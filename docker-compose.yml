@@ -1,0 +1,24 @@
+services:
+  argus:
+    build:
+      context: .
+      target: production
+    container_name: argus
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - argus-data:/app/data
+
+  argus-dev:
+    build:
+      context: .
+      target: dev
+    container_name: argus-dev
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    command: pytest tests/ -v --tb=short
+
+volumes:
+  argus-data:
