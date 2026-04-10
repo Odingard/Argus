@@ -13,6 +13,7 @@ from typing import Any
 
 from argus.models.findings import Finding, FindingSeverity
 from argus.orchestrator.engine import ScanResult
+from argus.reporting.cerberus_rules import CerberusRuleGenerator
 
 
 class ReportRenderer:
@@ -60,6 +61,20 @@ class ReportRenderer:
                         if f.owasp_agentic:
                             lines.append(f"      OWASP: {f.owasp_agentic.value}")
 
+        # CERBERUS detection rules
+        cerberus_gen = CerberusRuleGenerator()
+        cerberus_rules = cerberus_gen.generate_rules(validated)
+        if cerberus_rules:
+            lines.append("\n  CERBERUS DETECTION RULES")
+            lines.append("  " + "-" * 66)
+            lines.append(f"  Generated {len(cerberus_rules)} detection rule(s) from validated findings")
+            for rule in cerberus_rules:
+                lines.append(f"\n  [{rule.severity}] {rule.rule_id}: {rule.title}")
+                lines.append(f"    Agent: {rule.agent_source}")
+                if rule.owasp_mapping:
+                    lines.append(f"    OWASP: {rule.owasp_mapping}")
+                lines.append(f"    Action: {rule.recommended_action}")
+
         # Compound attack paths
         if scan_result.compound_paths:
             lines.append("\n  COMPOUND ATTACK PATHS")
@@ -77,6 +92,11 @@ class ReportRenderer:
         return "\n".join(lines)
 
     def _build_report(self, scan_result: ScanResult) -> dict[str, Any]:
+        # Generate CERBERUS detection rules from validated findings only
+        cerberus_gen = CerberusRuleGenerator()
+        cerberus_rules = cerberus_gen.generate_rules(scan_result.validated_findings)
+        ruleset = cerberus_gen.export_ruleset(cerberus_rules)
+
         return {
             "argus_version": "0.1.0",
             "report_generated": datetime.now(UTC).isoformat(),
@@ -84,6 +104,7 @@ class ReportRenderer:
             "findings": [f.model_dump() for f in scan_result.findings],
             "compound_attack_paths": [p.model_dump() for p in scan_result.compound_paths],
             "agent_results": [r.model_dump() for r in scan_result.agent_results],
+            "cerberus_rules": ruleset,
         }
 
     def _group_by_severity(self, findings: list[Finding]) -> dict[FindingSeverity, list[Finding]]:

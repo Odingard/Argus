@@ -163,6 +163,25 @@ class Finding(BaseModel):
         return self.status == FindingStatus.VALIDATED and self.validation is not None and self.validation.validated
 
 
+class CerberusRule(BaseModel):
+    """A CERBERUS detection rule generated from an ARGUS finding.
+
+    When ARGUS (offense) finds a vulnerability, it outputs detection rules
+    that CERBERUS (defense) can use to catch that same attack in production.
+    """
+
+    rule_id: str = Field(..., description="Unique rule identifier, e.g. CERB-PI-001")
+    title: str = Field(..., description="Human-readable rule name")
+    description: str = Field(..., description="What this rule detects")
+    severity: str = Field(..., description="CRITICAL, HIGH, MEDIUM, or LOW")
+    agent_source: str = Field(..., description="Which ARGUS agent found this")
+    detection_logic: str = Field(..., description="Pseudo-code / description of what to monitor")
+    indicators: list[str] = Field(default_factory=list, description="Observable indicators")
+    owasp_mapping: str = Field("", description="OWASP Agentic AI category")
+    finding_id: str = Field(..., description="Reference back to the ARGUS finding")
+    recommended_action: str = Field("", description="What to do when this rule fires")
+
+
 class CompoundAttackPath(BaseModel):
     """A multi-step attack path chaining findings from multiple agents.
 
