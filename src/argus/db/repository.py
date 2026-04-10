@@ -188,9 +188,11 @@ class APIKeyRepository:
         if api_key is None:
             return None
 
-        # Check expiry
-        if api_key.expires_at and api_key.expires_at < datetime.now(UTC):
-            return None
+        # Check expiry (handle tz-naive datetimes from SQLite)
+        if api_key.expires_at:
+            expires = api_key.expires_at if api_key.expires_at.tzinfo else api_key.expires_at.replace(tzinfo=UTC)
+            if expires < datetime.now(UTC):
+                return None
 
         # Update last used
         api_key.last_used_at = datetime.now(UTC)

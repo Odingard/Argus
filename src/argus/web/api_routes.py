@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from argus.db.repository import APIKeyRepository, ScanRepository, TargetRepository
 from argus.db.session import init_db
@@ -22,6 +22,33 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Request/response schemas
 # ---------------------------------------------------------------------------
+
+
+def _validate_target_urls(urls: list[str]) -> list[str]:
+    """Validate URLs for SSRF protection, matching ScanRequest validators."""
+    from argus.web.server import _validate_url_for_scan
+
+    if len(urls) > 50:
+        raise ValueError("Too many MCP URLs (max 50)")
+    for url in urls:
+        try:
+            _validate_url_for_scan(url)
+        except ValueError as exc:
+            raise ValueError(f"Invalid MCP URL '{url}': {exc}") from exc
+    return urls
+
+
+def _validate_target_endpoint(v: str | None) -> str | None:
+    """Validate a single endpoint URL for SSRF protection."""
+    if v is None:
+        return v
+    from argus.web.server import _validate_url_for_scan
+
+    try:
+        _validate_url_for_scan(v)
+    except ValueError as exc:
+        raise ValueError(f"Invalid agent endpoint '{v}': {exc}") from exc
+    return v
 
 
 class TargetCreate(BaseModel):
@@ -36,6 +63,16 @@ class TargetCreate(BaseModel):
     client_contact: str = ""
     notes: str = ""
 
+    @field_validator("mcp_server_urls")
+    @classmethod
+    def _validate_mcp_urls(cls, v: list[str]) -> list[str]:
+        return _validate_target_urls(v)
+
+    @field_validator("agent_endpoint")
+    @classmethod
+    def _validate_agent_ep(cls, v: str | None) -> str | None:
+        return _validate_target_endpoint(v)
+
 
 class TargetUpdate(BaseModel):
     name: str | None = None
@@ -48,6 +85,18 @@ class TargetUpdate(BaseModel):
     client_name: str | None = None
     client_contact: str | None = None
     notes: str | None = None
+
+    @field_validator("mcp_server_urls")
+    @classmethod
+    def _validate_mcp_urls(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        return _validate_target_urls(v)
+
+    @field_validator("agent_endpoint")
+    @classmethod
+    def _validate_agent_ep(cls, v: str | None) -> str | None:
+        return _validate_target_endpoint(v)
 
 
 class APIKeyCreate(BaseModel):
