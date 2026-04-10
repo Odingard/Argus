@@ -49,6 +49,10 @@ class AgentConfig(BaseModel):
     llm_provider: str = "anthropic"
     llm_model: str = "claude-sonnet-4-20250514"
 
+    # Demo pacing — artificial delay between techniques (seconds).
+    # Default 0 = production speed. Set higher for live demos so panels visibly update.
+    demo_pace_seconds: float = 0.0
+
     # Corpus
     corpus_tags: list[str] = Field(default_factory=list)
 

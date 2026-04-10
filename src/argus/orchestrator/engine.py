@@ -55,6 +55,12 @@ class BaseAttackAgent:
             )
         )
         self._signals_emitted += 1
+        await self._pace()
+
+    async def _pace(self) -> None:
+        """Optional artificial delay between emitted events for live demos."""
+        if self.config.demo_pace_seconds > 0:
+            await asyncio.sleep(self.config.demo_pace_seconds)
 
     async def emit_partial(self, data: dict[str, Any]) -> None:
         """Emit a partial finding for real-time correlation."""
@@ -156,12 +162,17 @@ class Orchestrator:
         agent_types: list[AgentType] | None = None,
         scan_id: str | None = None,
         timeout: float = 600.0,
+        demo_pace_seconds: float = 0.0,
     ) -> ScanResult:
         """Execute a full ARGUS scan against a target.
 
         Deploys all registered agents (or specified subset) simultaneously.
         All agents launch at T=0. Findings are collected, validated, and
         correlated into compound attack paths.
+
+        Args:
+            demo_pace_seconds: Artificial inter-technique delay for live demos.
+                Default 0 = production speed. Set 0.3-1.0 for visible UI updates.
         """
         scan_id = scan_id or str(uuid.uuid4())
         result = ScanResult(scan_id=scan_id)
@@ -190,6 +201,7 @@ class Orchestrator:
                 agent_type=agent_type,
                 scan_id=scan_id,
                 target=target,
+                demo_pace_seconds=demo_pace_seconds,
             )
             agent_class = self._agent_registry[agent_type]
             agent = agent_class(config=config, signal_bus=self.signal_bus)

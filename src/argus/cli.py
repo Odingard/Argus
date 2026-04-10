@@ -133,6 +133,62 @@ def status() -> None:
 @click.option("--mcp-url", multiple=True, help="MCP server URL(s) to test")
 @click.option("--agent-endpoint", help="Target agent endpoint URL")
 @click.option("--timeout", default=600, help="Scan timeout in seconds")
+@click.option(
+    "--demo",
+    is_flag=True,
+    help="Enable demo pacing (0.4s between findings) so updates are visible",
+)
+@click.option(
+    "--pace",
+    type=float,
+    default=0.0,
+    help="Custom inter-event delay in seconds (overrides --demo)",
+)
+def live(
+    target_name: str,
+    mcp_url: tuple[str, ...],
+    agent_endpoint: str | None,
+    timeout: int,
+    demo: bool,
+    pace: float,
+) -> None:
+    """Run an ARGUS scan with the LIVE streaming dashboard.
+
+    Watch the attack swarm work in real time — agent status, findings,
+    signal bus events, all updating live in your terminal.
+    """
+    for url in mcp_url:
+        _validate_url(url)
+    if agent_endpoint:
+        _validate_url(agent_endpoint)
+
+    target = TargetConfig(
+        name=target_name,
+        mcp_server_urls=list(mcp_url),
+        agent_endpoint=agent_endpoint,
+    )
+
+    from argus.ui import LiveDashboard
+
+    orchestrator = _create_orchestrator()
+    dashboard = LiveDashboard(console=console)
+
+    pace_seconds = pace if pace > 0 else (0.4 if demo else 0.0)
+    asyncio.run(
+        dashboard.run(
+            orchestrator,
+            target,
+            timeout=float(timeout),
+            demo_pace_seconds=pace_seconds,
+        )
+    )
+
+
+@main.command()
+@click.argument("target_name")
+@click.option("--mcp-url", multiple=True, help="MCP server URL(s) to test")
+@click.option("--agent-endpoint", help="Target agent endpoint URL")
+@click.option("--timeout", default=600, help="Scan timeout in seconds")
 @click.option("--output", "-o", help="Output file path for JSON report")
 def scan(
     target_name: str,
