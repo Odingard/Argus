@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test test-v build clean docker docker-test run status corpus
+.PHONY: help install dev lint format test test-v build clean docker docker-test run status corpus benchmark benchmark-up benchmark-down demo demo-watch baseline cinematic
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -45,3 +45,28 @@ corpus: ## Show attack corpus stats
 
 scan: ## Run a scan (usage: make scan TARGET="name" MCP_URL="url")
 	argus scan "$(TARGET)" --mcp-url "$(MCP_URL)"
+
+# ----- Benchmark / Demo -----
+
+benchmark-up: ## Spin up the ARGUS Gauntlet benchmark containers
+	docker compose -f benchmark/docker-compose.yml up -d
+	@echo
+	@echo "Benchmark scenarios running:"
+	@echo "  Scenario 01 — Poisoned MCP:        http://localhost:8001"
+	@echo "  Scenario 02 — Injection Gauntlet:  http://localhost:8002"
+	@echo "  Scenario 03 — Supply Chain Trap:   http://localhost:8003 + 8004"
+
+benchmark-down: ## Stop the benchmark containers
+	docker compose -f benchmark/docker-compose.yml down
+
+baseline: benchmark-up ## Run ARGUS baseline against the benchmark and score
+	.venv/bin/python benchmark/run_baseline.py
+
+cinematic: benchmark-up ## Watch ARGUS attack the benchmark with the cinematic dashboard
+	.venv/bin/python benchmark/run_cinematic.py
+
+demo: ## Re-record the ARGUS action GIF and update assets — RUN AFTER EVERY MEANINGFUL CHANGE
+	./benchmark/record_demo.sh
+
+demo-watch: ## Open the latest GIF
+	open benchmark/assets/argus-action.gif

@@ -1,4 +1,4 @@
-# ARGUS XBOW Challenge — Public Leaderboard
+# ARGUS Gauntlet — Public Leaderboard
 
 Scores from all tools that have been validated against the ARGUS AI Agent Security Benchmark.
 

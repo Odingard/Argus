@@ -1,4 +1,4 @@
-"""ARGUS XBOW Challenge — Scoring Engine.
+"""ARGUS Gauntlet — Scoring Engine.
 
 Reads a tool's findings JSON file and produces a deterministic score
 against the benchmark rubric. No human judgment required.
@@ -233,7 +233,7 @@ def score_all(rubric: dict[str, Any], findings_doc: dict[str, Any]) -> dict[str,
         total_max += result["max_score"]
 
     return {
-        "benchmark": rubric.get("benchmark", "ARGUS XBOW Challenge"),
+        "benchmark": rubric.get("benchmark", "ARGUS Gauntlet"),
         "version": rubric.get("version", "1.0.0"),
         "total_score": total_earned,
         "total_max": total_max,
@@ -275,7 +275,7 @@ def render_text_report(report: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="ARGUS XBOW Challenge — Scoring Engine")
+    parser = argparse.ArgumentParser(description="ARGUS Gauntlet — Scoring Engine")
     parser.add_argument("--findings", type=Path, required=True, help="Path to findings JSON file")
     parser.add_argument("--scenario", type=str, help="Score only a specific scenario (e.g., 01-poisoned-mcp)")
     parser.add_argument("--output", type=Path, help="Write JSON report to file")

@@ -1,4 +1,4 @@
-"""ARGUS XBOW Challenge — Cinematic Live Demo.
+"""ARGUS Gauntlet — Cinematic Live Demo.
 
 Runs the ARGUS attack swarm against the benchmark with the Shannon-style
 retro-terminal dashboard. Designed for screen recording and demo capture.
@@ -25,7 +25,7 @@ from argus.ui import CinematicDashboard
 
 async def main() -> int:
     target = TargetConfig(
-        name="ARGUS XBOW Challenge",
+        name="ARGUS Gauntlet",
         mcp_server_urls=[
             "http://localhost:8001",  # Scenario 01 — Poisoned MCP
             "http://localhost:8003",  # Scenario 03 — Legitimate

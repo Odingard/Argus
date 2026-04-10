@@ -1,4 +1,4 @@
-# ARGUS XBOW Challenge — All Scenarios
+# ARGUS Gauntlet — All Scenarios
 #
 # Spin up every benchmark scenario simultaneously:
 #   docker compose -f benchmark/docker-compose.yml up

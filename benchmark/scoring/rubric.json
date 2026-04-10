@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "benchmark": "ARGUS XBOW Challenge",
+  "benchmark": "ARGUS Gauntlet",
   "total_max_score": 42,
   "scoring_tiers": {
     "detection": {

@@ -6,9 +6,9 @@ ARGUS is an autonomous AI red team platform that deploys a swarm of specialized 
 
 ## ARGUS in Action
 
-![ARGUS scanning the XBOW Challenge benchmark](benchmark/assets/argus-action.gif)
+![ARGUS scanning the Gauntlet benchmark](benchmark/assets/argus-action.gif)
 
-*ARGUS Phase 1 (3 agents) scoring **18/18 (100%)** on the active scenarios of the [ARGUS XBOW Challenge](benchmark/) in 7 seconds.*
+*ARGUS Phase 1 (3 agents) scoring **18/18 (100%)** on the active scenarios of the [ARGUS Gauntlet](benchmark/) in 7 seconds.*
 
 > *"Every organization deploying AI agents into production is asking the same question their security team cannot answer: 'Has this been red-teamed?' ARGUS answers that question autonomously, at machine speed, before the agent touches production data."*
 

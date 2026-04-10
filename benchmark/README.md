@@ -1,18 +1,18 @@
-# ARGUS XBOW Challenge
+# ARGUS Gauntlet
 
 **The first public benchmark for AI-native offensive security testing.**
 
-The ARGUS XBOW Challenge is a public, reproducible benchmark of deliberately vulnerable AI agent environments. Any security tool can run against it, score itself, and submit results to the public leaderboard.
+The ARGUS Gauntlet is a public, reproducible benchmark of deliberately vulnerable AI agent environments. Any security tool can run against it, score itself, and submit results to the public leaderboard.
 
-> *Inspired by XBOW's contribution to traditional pentesting benchmarks. Built for the AI agent attack surface that XBOW was never built to reach.*
+> *Built for the AI agent attack surface that traditional pentesting benchmarks were never designed to reach.*
 
 ---
 
 ## Why This Benchmark Exists
 
-Traditional security benchmarks (OWASP Juice Shop, HackTheBox, XBOW's own benchmark) test traditional infrastructure. None of them test AI-native attack surfaces — prompt injection, tool poisoning, memory poisoning, cross-agent exfiltration, or multi-agent pipeline logic.
+Traditional security benchmarks (OWASP Juice Shop, HackTheBox, autonomous web pentesting benchmarks) test traditional infrastructure. None of them test AI-native attack surfaces — prompt injection, tool poisoning, memory poisoning, cross-agent exfiltration, or multi-agent pipeline logic.
 
-The ARGUS XBOW Challenge fills that gap. It is the first benchmark where any tool — open source or commercial, ARGUS or otherwise — can prove whether it can find AI agent vulnerabilities at machine speed.
+The ARGUS Gauntlet fills that gap. It is the first benchmark where any tool — open source or commercial, ARGUS or otherwise — can prove whether it can find AI agent vulnerabilities at machine speed.
 
 **The answers are published openly.** Unlike CTF challenges, secrecy is not the point. Adoption is the point. The more researchers, academics, and tool builders use this benchmark, the more it becomes the reference standard for the category.
 

@@ -1,4 +1,4 @@
-"""ARGUS XBOW Challenge — Baseline Score Runner.
+"""ARGUS Gauntlet — Baseline Score Runner.
 
 Runs ARGUS Phase 1 agents against the deployed benchmark scenarios
 and produces a baseline score report.
@@ -31,12 +31,12 @@ SCORE_OUT = BENCHMARK_DIR / "baseline-score.json"
 async def run_benchmark() -> dict:
     """Run all Phase 1 agents against the deployed benchmark scenarios."""
     print("=" * 70)
-    print("  ARGUS XBOW Challenge — Baseline Run")
+    print("  ARGUS Gauntlet — Baseline Run")
     print("=" * 70)
     print()
 
     target = TargetConfig(
-        name="argus-xbow-benchmark",
+        name="ARGUS Gauntlet",
         mcp_server_urls=[
             "http://localhost:8001",  # Scenario 01 — Poisoned MCP
             "http://localhost:8003",  # Scenario 03 — Legitimate

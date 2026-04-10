@@ -1,4 +1,4 @@
-"""ARGUS XBOW Challenge — LIVE Benchmark Runner.
+"""ARGUS Gauntlet — LIVE Benchmark Runner.
 
 Runs ARGUS Phase 1 agents against the deployed benchmark scenarios
 with the live streaming dashboard. Watch the attack swarm work.
@@ -25,7 +25,7 @@ from argus.ui import LiveDashboard
 
 async def main() -> int:
     target = TargetConfig(
-        name="argus-xbow-benchmark",
+        name="ARGUS Gauntlet",
         mcp_server_urls=[
             "http://localhost:8001",  # Scenario 01 — Poisoned MCP
             "http://localhost:8003",  # Scenario 03 — Legitimate
