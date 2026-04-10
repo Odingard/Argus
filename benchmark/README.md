@@ -24,7 +24,7 @@ benchmark/
 │   ├── 09-cross-agent-exfil/   Multi-agent trust boundary violation
 │   └── 10-model-extraction/    System prompt & config extraction
 ├── scoring/                ← ARGUS internal scoring (VERDICT WEIGHT certified)
-│   ├── rubric.json         ← Maps Findings → 7 scenarios via Consequence Weight
+│   ├── rubric.json         ← Maps Findings → 10 scenarios via Consequence Weight
 │   └── score.py            ← Reads ARGUS findings.json, produces score report
 ├── official/               ← Community submission scoring (Andre's public format)
 │   ├── README.md
@@ -33,7 +33,7 @@ benchmark/
 │   ├── score.py            ← Public scorer
 │   ├── docs/findings-format.md
 │   └── submit/submit.py
-├── run_baseline.py         ← Run ARGUS Phase 1 agents against all 7 scenarios
+├── run_baseline.py         ← Run ARGUS Phase 1 agents against all 10 scenarios
 ├── run_cinematic.py        ← Same, with the cinematic terminal dashboard
 ├── run_live.py             ← Same, with the live multi-panel dashboard
 ├── docker-compose.yml      ← Spin up all 10 scenarios at once

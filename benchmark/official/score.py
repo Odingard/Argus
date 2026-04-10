@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Any
 
 RUBRIC_PATH = Path(__file__).parent / "rubric.json"
-MAX_SCORE = 42
+MAX_SCORE = 60
 VERSION = "1.0"
 
 

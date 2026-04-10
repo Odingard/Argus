@@ -240,8 +240,8 @@ class ContextWindowHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/reset":
             session_id = data.get("session_id")
-            if session_id and session_id in SESSIONS:
-                del SESSIONS[session_id]
+            if session_id:
+                SESSIONS.pop(session_id, None)
             else:
                 SESSIONS.clear()
             self._respond(200, {"status": "reset"})
