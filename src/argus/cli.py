@@ -16,10 +16,21 @@ from rich.panel import Panel
 from rich.table import Table
 
 from argus import __version__
+from argus.agents import PromptInjectionHunter, SupplyChainAgent, ToolPoisoningAgent
 from argus.corpus.manager import AttackCorpus
-from argus.models.agents import TargetConfig
+from argus.models.agents import AgentType, TargetConfig
 from argus.orchestrator.engine import Orchestrator
 from argus.reporting.renderer import ReportRenderer
+
+
+def _create_orchestrator() -> Orchestrator:
+    """Create an orchestrator with all Phase 1 agents registered."""
+    orch = Orchestrator()
+    orch.register_agent(AgentType.PROMPT_INJECTION, PromptInjectionHunter)
+    orch.register_agent(AgentType.TOOL_POISONING, ToolPoisoningAgent)
+    orch.register_agent(AgentType.SUPPLY_CHAIN, SupplyChainAgent)
+    return orch
+
 
 console = Console()
 
@@ -47,9 +58,7 @@ def _validate_url(url: str) -> None:
     """Validate URL has allowed scheme and valid hostname. Prevents SSRF."""
     parsed = urlparse(url)
     if parsed.scheme not in ALLOWED_URL_SCHEMES:
-        raise click.BadParameter(
-            f"URL scheme '{parsed.scheme}' not allowed. Use http:// or https://"
-        )
+        raise click.BadParameter(f"URL scheme '{parsed.scheme}' not allowed. Use http:// or https://")
     if not parsed.netloc:
         raise click.BadParameter("URL must have a valid hostname")
 
@@ -60,9 +69,7 @@ def _validate_output_path(path_str: str) -> Path:
     cwd = Path.cwd().resolve()
 
     if not str(output_path).startswith(str(cwd)):
-        raise click.BadParameter(
-            f"Output path must be within current directory ({cwd})"
-        )
+        raise click.BadParameter(f"Output path must be within current directory ({cwd})")
 
     # Reject if parent directory is a symlink
     if output_path.parent.is_symlink():
@@ -93,11 +100,16 @@ def banner() -> None:
 @main.command()
 def status() -> None:
     """Show ARGUS system status."""
+    orch = _create_orchestrator()
+    agent_count = len(orch.get_registered_agents())
+    agent_names = [a.value for a in orch.get_registered_agents()]
+
     console.print(
         Panel.fit(
             f"[bold red]ARGUS[/] v{__version__}\n\n"
-            "[bold]Phase:[/] 0 — Orchestration Foundation\n"
-            "[bold]Agents Registered:[/] 0 (Phase 1 builds first 3)\n"
+            f"[bold]Phase:[/] 1 — First Wave Agents\n"
+            f"[bold]Agents Registered:[/] {agent_count}\n"
+            f"[bold]Agents:[/] {', '.join(agent_names)}\n"
             "[bold]Corpus Status:[/] Checking...",
             title="System Status",
         )
@@ -153,19 +165,10 @@ def scan(
         agent_endpoint=agent_endpoint,
     )
 
-    orchestrator = Orchestrator()
+    orchestrator = _create_orchestrator()
     registered = orchestrator.get_registered_agents()
 
-    if not registered:
-        console.print(
-            "[yellow]No attack agents registered yet.[/]\n"
-            "Phase 0 provides the orchestration framework.\n"
-            "Phase 1 (next) builds the first 3 attack agents:\n"
-            "  1. Prompt Injection Hunter\n"
-            "  2. Tool Poisoning Agent\n"
-            "  3. Supply Chain Agent\n"
-        )
-        return
+    console.print(f"[bold]Deploying {len(registered)} agents simultaneously...[/]\n")
 
     result = asyncio.run(orchestrator.run_scan(target=target, timeout=timeout))
 
