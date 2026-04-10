@@ -43,8 +43,8 @@ export const getDashboardStats = () => api.get<Record<string, unknown>>("/api/da
 // Scans
 export const getScans = () => api.get<{ scans: unknown[] }>("/api/scans");
 export const getScan = (id: string) => api.get<Record<string, unknown>>(`/api/scans/${id}`);
-export const startScan = (body: unknown) => api.post<Record<string, unknown>>("/api/scans/start", body);
-export const cancelScan = (id: string) => api.post<Record<string, unknown>>(`/api/scans/${id}/cancel`);
+export const startScan = (body: unknown) => api.post<Record<string, unknown>>("/api/scan/start", body);
+export const cancelScan = () => api.post<Record<string, unknown>>("/api/scan/stop");
 
 // Targets
 export const getTargets = () => api.get<{ targets: unknown[] }>("/api/targets");
@@ -58,5 +58,5 @@ export const updateFindingStatus = (id: string, status: string) =>
   api.put<Record<string, unknown>>(`/api/findings/${id}/status`, { status });
 
 // Health
-export const getHealth = () => api.get<{ status: string }>("/health");
+export const getHealth = () => api.get<{ status: string }>("/api/health");
 export const getAgentStatus = () => api.get<{ agents: unknown[] }>("/api/agents/status");
