@@ -4,6 +4,12 @@
 
 ARGUS is an autonomous AI red team platform that deploys a swarm of specialized offensive agents simultaneously against AI systems, MCP servers, and multi-agent workflows. Every agent attacks a different AI-specific attack domain in parallel. A Correlation Agent chains individual findings into multi-step attack paths. Every finding is validated with proof of exploitation before it is surfaced.
 
+## ARGUS in Action
+
+![ARGUS scanning the XBOW Challenge benchmark](benchmark/assets/argus-action.gif)
+
+*ARGUS Phase 1 (3 agents) scoring **18/18 (100%)** on the active scenarios of the [ARGUS XBOW Challenge](benchmark/) in 7 seconds.*
+
 > *"Every organization deploying AI agents into production is asking the same question their security team cannot answer: 'Has this been red-teamed?' ARGUS answers that question autonomously, at machine speed, before the agent touches production data."*
 
 ---
@@ -80,34 +86,38 @@ Traditional security testing tools cannot test AI agent vulnerabilities. They we
 
 ---
 
-## Quick Start
+## Quick Start — Watch ARGUS Work
 
-### Installation
+Want to see ARGUS in action? Spin up the benchmark and run the cinematic dashboard:
 
 ```bash
 git clone https://github.com/Odingard/Argus.git
 cd Argus
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+
+# Spin up 4 deliberately vulnerable AI agent containers
+docker compose -f benchmark/docker-compose.yml up -d
+
+# Watch the attack swarm work
+python benchmark/run_cinematic.py
 ```
 
-### CLI Commands
+You'll see the Shannon-style cinematic dashboard render the live activity stream as ARGUS scores 18/18 on the Phase 1 scenarios.
+
+### Other CLI Commands
 
 ```bash
 # Show system status and corpus stats
 argus status
 
-# Show the ARGUS banner
-argus banner
-
-# View attack corpus statistics
-argus corpus
+# Run a scan with the cinematic dashboard
+argus live my-target --mcp-url https://mcp.example.com --cinematic
 
 # Probe an MCP server for hidden content
 argus probe https://mcp-server.example.com
 
-# Run a full scan against a target
+# Run a full scan with JSON output
 argus scan "My AI Agent" --mcp-url https://mcp.example.com --output report.json
 ```
 

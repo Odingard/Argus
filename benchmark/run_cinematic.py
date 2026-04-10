@@ -1,0 +1,72 @@
+"""ARGUS XBOW Challenge — Cinematic Live Demo.
+
+Runs the ARGUS attack swarm against the benchmark with the Shannon-style
+retro-terminal dashboard. Designed for screen recording and demo capture.
+
+Usage:
+    1. Start scenarios:  docker compose -f benchmark/docker-compose.yml up -d
+    2. Run cinematic:    python benchmark/run_cinematic.py
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+from pathlib import Path
+
+# Make ARGUS importable
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from argus.agents import PromptInjectionHunter, SupplyChainAgent, ToolPoisoningAgent
+from argus.models.agents import AgentType, TargetConfig
+from argus.orchestrator.engine import Orchestrator
+from argus.ui import CinematicDashboard
+
+
+async def main() -> int:
+    target = TargetConfig(
+        name="ARGUS XBOW Challenge",
+        mcp_server_urls=[
+            "http://localhost:8001",  # Scenario 01 — Poisoned MCP
+            "http://localhost:8003",  # Scenario 03 — Legitimate
+            "http://localhost:8004",  # Scenario 03 — Malicious lookalike
+        ],
+        agent_endpoint="http://localhost:8002/chat",  # Scenario 02 — Injection Gauntlet
+        non_destructive=True,
+        max_requests_per_minute=120,
+    )
+
+    orchestrator = Orchestrator()
+    orchestrator.register_agent(AgentType.PROMPT_INJECTION, PromptInjectionHunter)
+    orchestrator.register_agent(AgentType.TOOL_POISONING, ToolPoisoningAgent)
+    orchestrator.register_agent(AgentType.SUPPLY_CHAIN, SupplyChainAgent)
+
+    dashboard = CinematicDashboard()
+    result = await dashboard.run(
+        orchestrator,
+        target,
+        timeout=300.0,
+        demo_pace_seconds=0.5,
+    )
+
+    # Score and print summary
+    sys.path.insert(0, str(Path(__file__).parent / "scoring"))
+    from score import load_rubric, render_text_report, score_all
+
+    findings_doc = {
+        "scan_id": result.scan_id,
+        "target": target.name,
+        "findings": [f.model_dump() for f in result.findings],
+        "compound_attack_paths": [p.model_dump() for p in result.compound_paths],
+    }
+
+    rubric = load_rubric()
+    report = score_all(rubric, findings_doc)
+    print()
+    print(render_text_report(report))
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))

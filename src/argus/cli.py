@@ -144,6 +144,11 @@ def status() -> None:
     default=0.0,
     help="Custom inter-event delay in seconds (overrides --demo)",
 )
+@click.option(
+    "--cinematic",
+    is_flag=True,
+    help="Use the Shannon-style cinematic retro-terminal dashboard (for demos/recordings)",
+)
 def live(
     target_name: str,
     mcp_url: tuple[str, ...],
@@ -151,11 +156,15 @@ def live(
     timeout: int,
     demo: bool,
     pace: float,
+    cinematic: bool,
 ) -> None:
     """Run an ARGUS scan with the LIVE streaming dashboard.
 
     Watch the attack swarm work in real time — agent status, findings,
     signal bus events, all updating live in your terminal.
+
+    --cinematic switches to the Shannon-style retro-terminal dashboard
+    designed for screen recording and demo capture.
     """
     for url in mcp_url:
         _validate_url(url)
@@ -168,12 +177,16 @@ def live(
         agent_endpoint=agent_endpoint,
     )
 
-    from argus.ui import LiveDashboard
+    from argus.ui import CinematicDashboard, LiveDashboard
 
     orchestrator = _create_orchestrator()
-    dashboard = LiveDashboard(console=console)
+    pace_seconds = pace if pace > 0 else (0.4 if demo or cinematic else 0.0)
 
-    pace_seconds = pace if pace > 0 else (0.4 if demo else 0.0)
+    if cinematic:
+        dashboard = CinematicDashboard(console=console)
+    else:
+        dashboard = LiveDashboard(console=console)
+
     asyncio.run(
         dashboard.run(
             orchestrator,
