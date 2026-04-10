@@ -229,6 +229,24 @@ def create_production_router() -> APIRouter:
     # Auth / API Key Management
     # ------------------------------------------------------------------
 
+    @router.post("/auth/login")
+    async def auth_login(
+        auth: AuthContext = Depends(require_role("read")),
+    ) -> dict[str, Any]:
+        """Validate a bearer token and return auth context.
+
+        The frontend calls this to verify the token is valid before
+        storing it in localStorage.  The actual authentication happens
+        in the ``require_role`` dependency — if the token is invalid,
+        FastAPI returns 401 before this handler runs.
+        """
+        return {
+            "status": "authenticated",
+            "role": auth.role.value,
+            "key_name": auth.key_name,
+            "auth_method": auth.auth_method,
+        }
+
     @router.post("/auth/keys")
     async def create_api_key(
         body: APIKeyCreate,
