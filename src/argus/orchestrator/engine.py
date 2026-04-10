@@ -222,11 +222,39 @@ class Orchestrator:
             result.completed_at = datetime.now(UTC)
             return result
 
-        # Per-scan SignalBus prevents cross-contamination if a second scan
-        # starts before the first cleans up. The instance attribute is also
-        # repointed so legacy introspection sees the current bus.
-        scan_signal_bus = SignalBus()
-        self.signal_bus = scan_signal_bus
+        # Cross-scan contamination prevention. We keep the per-instance
+        # SignalBus stable so external subscribers (e.g. the web dashboard)
+        # don't lose their subscription when a new scan starts. The
+        # _scan_lock acquired here serializes scans so two run_scan()
+        # invocations on the same Orchestrator never interleave signals,
+        # and we clear stale history at the start of each scan.
+        await self._scan_lock.acquire()
+        try:
+            return await self._run_scan_locked(
+                scan_id=scan_id,
+                result=result,
+                target=target,
+                types_to_deploy=types_to_deploy,
+                timeout=timeout,
+                demo_pace_seconds=demo_pace_seconds,
+            )
+        finally:
+            self._scan_lock.release()
+
+    async def _run_scan_locked(
+        self,
+        scan_id: str,
+        result: ScanResult,
+        target: TargetConfig,
+        types_to_deploy: list[AgentType],
+        timeout: float,
+        demo_pace_seconds: float,
+    ) -> ScanResult:
+        """Inner scan implementation that runs under self._scan_lock."""
+        scan_signal_bus = self.signal_bus
+        # Clear history only — preserves persistent broadcast subscribers
+        # like the web dashboard's signal handler.
+        await scan_signal_bus.clear_history()
 
         logger.info(
             "ARGUS SCAN %s — Deploying %d agents against target '%s'",
@@ -318,9 +346,11 @@ class Orchestrator:
         # Collect signal history
         result.signals = await self.signal_bus.get_history()
 
-        # Cleanup
+        # Cleanup — clear active agents but preserve signal subscribers so
+        # long-lived consumers (web dashboard, tests) keep receiving signals
+        # across subsequent scans on the same Orchestrator instance.
         self._active_agents.clear()
-        await self.signal_bus.clear()
+        await self.signal_bus.clear_history()
 
         result.completed_at = datetime.now(UTC)
 

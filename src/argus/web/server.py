@@ -46,7 +46,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 
-from argus.agents import PromptInjectionHunter, SupplyChainAgent, ToolPoisoningAgent
+from argus.agents import (
+    IdentitySpoofAgent,
+    MemoryPoisoningAgent,
+    PromptInjectionHunter,
+    SupplyChainAgent,
+    ToolPoisoningAgent,
+)
 from argus.models.agents import AgentType, TargetConfig
 from argus.orchestrator.engine import Orchestrator, ScanResult
 from argus.orchestrator.signal_bus import Signal, SignalType
@@ -443,6 +449,8 @@ def create_app() -> FastAPI:
         orchestrator.register_agent(AgentType.PROMPT_INJECTION, PromptInjectionHunter)
         orchestrator.register_agent(AgentType.TOOL_POISONING, ToolPoisoningAgent)
         orchestrator.register_agent(AgentType.SUPPLY_CHAIN, SupplyChainAgent)
+        orchestrator.register_agent(AgentType.MEMORY_POISONING, MemoryPoisoningAgent)
+        orchestrator.register_agent(AgentType.IDENTITY_SPOOF, IdentitySpoofAgent)
         state.orchestrator = orchestrator
 
         # Initialize agent state cards

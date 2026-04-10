@@ -49,6 +49,11 @@ const state = {
 // Setup
 // ============================================================
 
+// Embed mode: ?embed=cards renders only the attacker grid (for GIF capture).
+// In this mode we MUST NOT open the SSE EventSource — it's a long-lived
+// connection that prevents headless Chrome's load event from firing.
+const EMBED_MODE = new URLSearchParams(window.location.search).get('embed') === 'cards';
+
 document.addEventListener('DOMContentLoaded', async () => {
   renderEmptyAttackerCards();
 
@@ -74,10 +79,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.warn('Initial fetch failed:', e);
   }
 
-  connectEventStream();
+  if (!EMBED_MODE) {
+    connectEventStream();
+  }
 
-  document.getElementById('btn-start').addEventListener('click', startScan);
-  document.getElementById('btn-stop').addEventListener('click', stopScan);
+  const startBtn = document.getElementById('btn-start');
+  const stopBtn = document.getElementById('btn-stop');
+  if (startBtn) startBtn.addEventListener('click', startScan);
+  if (stopBtn) stopBtn.addEventListener('click', stopScan);
 });
 
 // ============================================================
@@ -196,7 +205,13 @@ function setStatus(status, title, sub) {
 
 function renderEmptyAttackerCards() {
   const grid = document.getElementById('attacker-grid');
-  const defaultAgents = ['prompt_injection_hunter', 'tool_poisoning', 'supply_chain'];
+  const defaultAgents = [
+    'prompt_injection_hunter',
+    'tool_poisoning',
+    'supply_chain',
+    'memory_poisoning',
+    'identity_spoof',
+  ];
 
   grid.innerHTML = '';
   defaultAgents.forEach((agentType) => {
@@ -353,9 +368,13 @@ async function startScan() {
   const body = {
     target_name: 'ARGUS Gauntlet',
     mcp_urls: [
-      'http://localhost:8001',
-      'http://localhost:8003',
-      'http://localhost:8004',
+      'http://localhost:8001',  // Scenario 01 — Tool Poisoning MCP
+      'http://localhost:8003',  // Scenario 02 — Memory Poisoning
+      'http://localhost:8005',  // Scenario 03 — Identity Spoof
+      'http://localhost:8007',  // Scenario 04 — Privilege Chain
+      'http://localhost:8009',  // Scenario 05 — Injection Gauntlet
+      'http://localhost:8011',  // Scenario 06 — Supply Chain
+      'http://localhost:8013',  // Scenario 07 — Race Condition
     ],
     agent_endpoint: 'http://localhost:8002/chat',
     timeout: 300,
@@ -377,7 +396,18 @@ async function startScan() {
     });
     if (!res.ok) {
       const err = await res.json();
-      alert(`Failed to start scan: ${err.detail || res.statusText}`);
+      // FastAPI returns err.detail as an array of {loc, msg, type} objects
+      // for pydantic validation errors. Flatten to readable text instead of
+      // letting the array stringify to "[object Object],[object Object]".
+      let detailText = res.statusText;
+      if (Array.isArray(err.detail)) {
+        detailText = err.detail.map((e) => e.msg || JSON.stringify(e)).join('\n');
+      } else if (typeof err.detail === 'string') {
+        detailText = err.detail;
+      } else if (err.detail) {
+        detailText = JSON.stringify(err.detail);
+      }
+      alert(`Failed to start scan:\n${detailText}`);
     }
   } catch (e) {
     alert(`Failed to start scan: ${e.message}`);

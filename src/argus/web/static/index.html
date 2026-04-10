@@ -8,6 +8,14 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23a855f7'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23000'/%3E%3C/svg%3E" />
 </head>
 <body>
+  <script>
+    // Embed mode: ?embed=cards renders only the attacker grid for GIF capture.
+    // Adds .embed-cards on <body> which the stylesheet uses to hide everything
+    // else and the JS uses to skip rendering panels that aren't needed.
+    if (new URLSearchParams(window.location.search).get('embed') === 'cards') {
+      document.body.classList.add('embed-cards');
+    }
+  </script>
   <div class="app">
     <!-- ============== SIDEBAR ============== -->
     <aside class="sidebar">
@@ -21,7 +29,7 @@
 
       <div class="advanced-pill">
         <span class="dot"></span>
-        Phase 1 — 3 agents
+        Phase 2 — 5 agents
       </div>
 
       <nav class="nav">
@@ -93,7 +101,7 @@
           <div class="tabs">
             <a class="tab active">Overview</a>
             <a class="tab">Findings <span class="tab-badge" id="tab-findings-count">0</span></a>
-            <a class="tab">Attackers <span class="tab-badge" id="tab-attackers-count">3</span></a>
+            <a class="tab">Attackers <span class="tab-badge" id="tab-attackers-count">5</span></a>
             <a class="tab">Signal Bus</a>
           </div>
         </div>
@@ -128,7 +136,7 @@
         </div>
 
         <!-- Attacker grid -->
-        <h2 class="section-title">Attack Swarm <span class="section-sub">3 agents deployed in parallel</span></h2>
+        <h2 class="section-title">Attack Swarm <span class="section-sub">5 agents deployed in parallel</span></h2>
         <div class="attacker-grid" id="attacker-grid">
           <!-- Cards inserted by JS -->
         </div>

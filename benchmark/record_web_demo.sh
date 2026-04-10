@@ -31,7 +31,9 @@ WEB_PID_FILE="/tmp/argus-web.pid"
 
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 # Chrome expects comma-separated dimensions, not x
-WINDOW_SIZE="1500,1100"
+# Sized to fit the 5-card attacker grid in embed mode (no sidebar/header/etc)
+WINDOW_SIZE="1700,420"
+EMBED_URL_PARAM="?embed=cards"
 
 KEEP_UP=0
 for arg in "$@"; do
@@ -77,7 +79,7 @@ log "Starting benchmark scenarios..."
 docker compose -f "${COMPOSE_FILE}" up -d >/dev/null 2>&1
 
 log "Waiting for endpoints..."
-for port in 8001 8002 8003 8004; do
+for port in 8001 8002 8003 8005 8007 8009 8011 8013; do
     for _ in {1..15}; do
         if curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then break; fi
         sleep 0.3
@@ -115,7 +117,15 @@ curl -sX POST "http://127.0.0.1:${PORT}/api/scan/start" \
     -H "Authorization: Bearer ${ARGUS_WEB_TOKEN_DEMO}" \
     -d '{
         "target_name": "ARGUS Gauntlet",
-        "mcp_urls": ["http://localhost:8001", "http://localhost:8003", "http://localhost:8004"],
+        "mcp_urls": [
+            "http://localhost:8001",
+            "http://localhost:8003",
+            "http://localhost:8005",
+            "http://localhost:8007",
+            "http://localhost:8009",
+            "http://localhost:8011",
+            "http://localhost:8013"
+        ],
         "agent_endpoint": "http://localhost:8002/chat",
         "timeout": 180,
         "demo_pace_seconds": 1.5
@@ -133,7 +143,7 @@ for i in $(seq 1 40); do
         --virtual-time-budget=1500 \
         --hide-scrollbars \
         --screenshot="${FRAMES_DIR}/frame_${frame_num}.png" \
-        "http://127.0.0.1:${PORT}/" \
+        "http://127.0.0.1:${PORT}/${EMBED_URL_PARAM}" \
         >/dev/null 2>&1 || true
     printf "  frame %s/40  " "$frame_num"
     sleep 0.8

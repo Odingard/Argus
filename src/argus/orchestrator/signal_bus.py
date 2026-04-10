@@ -119,8 +119,22 @@ class SignalBus:
         async with self._lock:
             return list(self._history)
 
+    async def clear_history(self) -> None:
+        """Clear signal history only — preserves subscriber registrations.
+
+        Use this between scans on a long-lived bus where external code
+        (e.g. the web dashboard) holds a persistent broadcast subscription.
+        """
+        async with self._lock:
+            self._history.clear()
+
     async def clear(self) -> None:
-        """Clear all subscriptions and history (thread-safe)."""
+        """Clear all subscriptions and history (thread-safe).
+
+        Wipes everything — use only in test teardown or final shutdown.
+        For between-scan cleanup on a shared bus, use ``clear_history()``
+        which preserves subscribers.
+        """
         async with self._lock:
             self._subscribers.clear()
             self._broadcast_subscribers.clear()

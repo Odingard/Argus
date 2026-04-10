@@ -795,3 +795,50 @@ button {
 .finding-unvalidated {
   color: var(--text-muted);
 }
+
+/* ============================================================
+   Embed mode — ?embed=cards
+   Renders only the attacker grid for GIF capture.
+   Hides sidebar, topbar, page header, status banner, and the
+   Live Findings Stream. The Attack Swarm h2 is preserved as
+   a small caption above the grid.
+   ============================================================ */
+body.embed-cards {
+  background: var(--bg-primary);
+  margin: 0;
+  padding: 0;
+}
+body.embed-cards .sidebar,
+body.embed-cards .topbar,
+body.embed-cards .page-header,
+body.embed-cards .status-card,
+body.embed-cards .findings-stream {
+  display: none !important;
+}
+/* Hide the second section-title ("Live Findings Stream") only */
+body.embed-cards h2.section-title + .findings-stream { display: none !important; }
+body.embed-cards .content > h2.section-title:last-of-type { display: none !important; }
+body.embed-cards .app {
+  display: block;
+}
+body.embed-cards .main {
+  margin: 0;
+  padding: 0;
+}
+body.embed-cards .content {
+  padding: 16px 24px;
+  max-width: none;
+}
+body.embed-cards h2.section-title {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+body.embed-cards .attacker-grid {
+  /* Force a 5-column row so all cards are visible at once for the GIF */
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}

@@ -62,9 +62,11 @@ mkdir -p "${ASSETS_DIR}"
 log "Starting benchmark scenarios..."
 docker compose -f "${COMPOSE_FILE}" up -d >/dev/null 2>&1
 
-# Wait for containers to be healthy
+# Wait for containers to be healthy. The 7-scenario benchmark binds:
+#   8001 mcp, 8002 target (scenario 01)
+#   8003 (02), 8005 (03), 8007 (04), 8009 (05), 8011 (06), 8013 (07)
 log "Waiting for endpoints to come up..."
-for port in 8001 8002 8003 8004; do
+for port in 8001 8002 8003 8005 8007 8009 8011 8013; do
     for i in {1..15}; do
         if curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then
             break
