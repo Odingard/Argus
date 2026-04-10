@@ -148,8 +148,7 @@ class LLMAttackAgent(BaseAttackAgent):
                 validated=True,
                 validation_method="direct_observation",
                 proof_of_exploitation=(
-                    proof_of_exploitation
-                    or f"Direct observation by {self.agent_type.value}: {title}"
+                    proof_of_exploitation or f"Direct observation by {self.agent_type.value}: {title}"
                 ),
                 reproducible=True,
                 attempts=1,

@@ -571,9 +571,7 @@ class SupplyChainAgent(LLMAttackAgent):
 
         for mcp_url in self.config.target.mcp_server_urls:
             try:
-                async with httpx.AsyncClient(
-                    timeout=10, event_hooks={"request": [], "response": []}
-                ) as client:
+                async with httpx.AsyncClient(timeout=10, event_hooks={"request": [], "response": []}) as client:
                     response = await client.post(
                         mcp_url,
                         json={
@@ -588,9 +586,7 @@ class SupplyChainAgent(LLMAttackAgent):
                         },
                     )
                     data = response.json()
-                    server_name = (
-                        data.get("result", {}).get("serverInfo", {}).get("name", "")
-                    )
+                    server_name = data.get("result", {}).get("serverInfo", {}).get("name", "")
                     if server_name:
                         results.append((mcp_url, server_name))
             except Exception as exc:

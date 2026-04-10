@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test test-v build clean docker docker-test run status corpus benchmark benchmark-up benchmark-down demo demo-watch baseline cinematic
+.PHONY: help install dev lint format test test-v build clean docker docker-test run status corpus benchmark benchmark-up benchmark-down demo demo-web demo-all demo-watch demo-watch-web baseline cinematic serve serve-dev
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -65,8 +65,24 @@ baseline: benchmark-up ## Run ARGUS baseline against the benchmark and score
 cinematic: benchmark-up ## Watch ARGUS attack the benchmark with the cinematic dashboard
 	.venv/bin/python benchmark/run_cinematic.py
 
-demo: ## Re-record the ARGUS action GIF and update assets — RUN AFTER EVERY MEANINGFUL CHANGE
+demo: ## Re-record the cinematic terminal GIF — RUN AFTER EVERY MEANINGFUL CHANGE
 	./benchmark/record_demo.sh
 
-demo-watch: ## Open the latest GIF
+demo-web: ## Re-record the web dashboard GIF — RUN AFTER EVERY MEANINGFUL CHANGE
+	./benchmark/record_web_demo.sh
+
+demo-all: demo demo-web ## Re-record both terminal and web dashboard GIFs
+
+demo-watch: ## Open the latest cinematic GIF
 	open benchmark/assets/argus-action.gif
+
+demo-watch-web: ## Open the latest web dashboard GIF
+	open benchmark/assets/argus-web-action.gif
+
+# ----- Web Dashboard -----
+
+serve: ## Launch the ARGUS web dashboard at http://localhost:8765
+	.venv/bin/argus serve
+
+serve-dev: ## Launch the ARGUS web dashboard with auto-reload
+	.venv/bin/argus serve --reload

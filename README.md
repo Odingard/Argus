@@ -6,11 +6,18 @@ ARGUS is an autonomous AI red team platform that deploys a swarm of specialized 
 
 ## ARGUS in Action
 
-![ARGUS scanning the Gauntlet benchmark](benchmark/assets/argus-action.gif)
+![ARGUS Web Dashboard scanning the Gauntlet benchmark](benchmark/assets/argus-web-action.gif)
 
-*ARGUS Phase 1 (3 agents) scoring **18/18 (100%)** on the active scenarios of the [ARGUS Gauntlet](benchmark/) in 7 seconds.*
+*The ARGUS Web Dashboard live-streaming a scan against the [ARGUS Gauntlet](benchmark/) — 3 agents deployed in parallel, 30 findings, 26 validated, end-to-end in under 25 seconds.*
 
 > *"Every organization deploying AI agents into production is asking the same question their security team cannot answer: 'Has this been red-teamed?' ARGUS answers that question autonomously, at machine speed, before the agent touches production data."*
+
+ARGUS ships with **two interfaces** — a web dashboard for operators and a cinematic terminal UI for screen recordings:
+
+| Interface | Use Case | Command |
+|---|---|---|
+| **Web Dashboard** (Aikido-style) | Operators, CISOs, demo for stakeholders | `argus serve` |
+| **Cinematic Terminal** (Shannon-style) | Screen recordings, GIF demos, CLI workflows | `argus live --cinematic` |
 
 ---
 
@@ -88,8 +95,6 @@ Traditional security testing tools cannot test AI agent vulnerabilities. They we
 
 ## Quick Start — Watch ARGUS Work
 
-Want to see ARGUS in action? Spin up the benchmark and run the cinematic dashboard:
-
 ```bash
 git clone https://github.com/Odingard/Argus.git
 cd Argus
@@ -99,17 +104,24 @@ pip install -e ".[dev]"
 # Spin up 4 deliberately vulnerable AI agent containers
 docker compose -f benchmark/docker-compose.yml up -d
 
-# Watch the attack swarm work
+# Option 1 — Web Dashboard (recommended)
+argus serve
+# Open http://localhost:8765 and click Start Scan
+
+# Option 2 — Cinematic Terminal Dashboard
 python benchmark/run_cinematic.py
 ```
 
-You'll see the Shannon-style cinematic dashboard render the live activity stream as ARGUS scores 18/18 on the Phase 1 scenarios.
+The web dashboard gives you the live operator view (sidebar nav, attacker cards, findings stream), while the cinematic dashboard gives you a Shannon-style retro-terminal view perfect for screen recordings.
 
 ### Other CLI Commands
 
 ```bash
 # Show system status and corpus stats
 argus status
+
+# Launch the web dashboard
+argus serve --port 8765
 
 # Run a scan with the cinematic dashboard
 argus live my-target --mcp-url https://mcp.example.com --cinematic

@@ -98,6 +98,34 @@ def banner() -> None:
 
 
 @main.command()
+@click.option("--host", default="127.0.0.1", help="Host to bind the web server to")
+@click.option("--port", default=8765, help="Port to bind the web server to")
+@click.option("--reload", is_flag=True, help="Enable auto-reload (development)")
+def serve(host: str, port: int, reload: bool) -> None:
+    """Launch the ARGUS web dashboard.
+
+    Starts the FastAPI server with the live web UI for running scans
+    and watching results in real time. Open http://localhost:8765 in
+    your browser after starting.
+    """
+    import uvicorn
+
+    console.print(BANNER, style="bold red")
+    console.print(f"\n[bold]ARGUS Web Dashboard[/] starting on [cyan]http://{host}:{port}[/]\n")
+    console.print("[dim]Make sure benchmark containers are running:[/]")
+    console.print("[dim]  docker compose -f benchmark/docker-compose.yml up -d[/]\n")
+
+    uvicorn.run(
+        "argus.web.server:create_app",
+        host=host,
+        port=port,
+        reload=reload,
+        factory=True,
+        log_level="info",
+    )
+
+
+@main.command()
 def status() -> None:
     """Show ARGUS system status."""
     orch = _create_orchestrator()
