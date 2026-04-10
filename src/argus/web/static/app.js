@@ -211,6 +211,11 @@ function renderEmptyAttackerCards() {
     'supply_chain',
     'memory_poisoning',
     'identity_spoof',
+    'context_window',
+    'cross_agent_exfiltration',
+    'privilege_escalation',
+    'race_condition',
+    'model_extraction',
   ];
 
   grid.innerHTML = '';
