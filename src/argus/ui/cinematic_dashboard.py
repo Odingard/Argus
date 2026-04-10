@@ -1,6 +1,6 @@
 """ARGUS Cinematic Dashboard.
 
-A Shannon-style retro-terminal live dashboard. Single bordered window
+A retro-terminal cinematic live dashboard. Single bordered window
 with a scrolling activity log, phase transition banners, and a caption
 strip narrating what ARGUS is doing in plain English.
 
@@ -30,7 +30,7 @@ from argus.models.agents import TargetConfig
 from argus.orchestrator.engine import Orchestrator, ScanResult
 from argus.orchestrator.signal_bus import Signal, SignalType
 
-# Shannon-inspired color palette
+# Cinematic dashboard color palette
 COLOR_BORDER = "dark_orange"
 COLOR_BG = "grey3"
 COLOR_TIMESTAMP = "grey50"
@@ -119,7 +119,7 @@ class LogEntry:
 
 
 class CinematicDashboard:
-    """Shannon-style retro-terminal live dashboard for ARGUS scans."""
+    """Retro-terminal cinematic live dashboard for ARGUS scans."""
 
     def __init__(self, console: Console | None = None, max_log_lines: int = 24) -> None:
         self.console = console or Console()

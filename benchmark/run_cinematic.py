@@ -1,6 +1,6 @@
 """ARGUS Gauntlet — Cinematic Live Demo.
 
-Runs the ARGUS attack swarm against the benchmark with the Shannon-style
+Runs the ARGUS attack swarm against the benchmark with the cinematic
 retro-terminal dashboard. Designed for screen recording and demo capture.
 
 Usage:

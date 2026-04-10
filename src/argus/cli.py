@@ -175,7 +175,7 @@ def status() -> None:
 @click.option(
     "--cinematic",
     is_flag=True,
-    help="Use the Shannon-style cinematic retro-terminal dashboard (for demos/recordings)",
+    help="Use the cinematic retro-terminal dashboard (for demos/recordings)",
 )
 def live(
     target_name: str,
@@ -191,7 +191,7 @@ def live(
     Watch the attack swarm work in real time — agent status, findings,
     signal bus events, all updating live in your terminal.
 
-    --cinematic switches to the Shannon-style retro-terminal dashboard
+    --cinematic switches to the retro-terminal cinematic dashboard
     designed for screen recording and demo capture.
     """
     for url in mcp_url:

@@ -30,8 +30,8 @@ ARGUS ships with **two interfaces** — a web dashboard for operators and a cine
 
 | Interface | Use Case | Command |
 |---|---|---|
-| **Web Dashboard** (Aikido-style) | Operators, CISOs, demo for stakeholders | `argus serve` |
-| **Cinematic Terminal** (Shannon-style) | Screen recordings, GIF demos, CLI workflows | `argus live --cinematic` |
+| **Web Dashboard** | Operators, CISOs, demos for stakeholders | `argus serve` |
+| **Cinematic Terminal** | Screen recordings, GIF demos, CLI workflows | `argus live --cinematic` |
 
 ---
 
@@ -126,7 +126,7 @@ argus serve
 python benchmark/run_cinematic.py
 ```
 
-The web dashboard gives you the live operator view (sidebar nav, attacker cards, findings stream), while the cinematic dashboard gives you a Shannon-style retro-terminal view perfect for screen recordings.
+The web dashboard gives you the live operator view (sidebar nav, attacker cards, findings stream), while the cinematic dashboard gives you a retro-terminal view perfect for screen recordings.
 
 ### Other CLI Commands
 
