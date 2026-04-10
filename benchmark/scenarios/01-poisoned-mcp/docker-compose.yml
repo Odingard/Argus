@@ -1,0 +1,8 @@
+services:
+  poisoned-mcp:
+    build: .
+    container_name: argus-bench-01-poisoned-mcp
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001

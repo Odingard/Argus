@@ -18,6 +18,7 @@ from argus.orchestrator.signal_bus import Signal, SignalBus, SignalType
 
 class MockInjectionAgent(BaseAttackAgent):
     """Mock prompt injection agent for testing the orchestrator."""
+
     agent_type = AgentType.PROMPT_INJECTION
 
     async def run(self) -> AgentResult:
@@ -60,6 +61,7 @@ class MockInjectionAgent(BaseAttackAgent):
 
 class MockToolPoisonAgent(BaseAttackAgent):
     """Mock tool poisoning agent for testing parallel execution."""
+
     agent_type = AgentType.TOOL_POISONING
 
     async def run(self) -> AgentResult:
@@ -105,6 +107,7 @@ async def test_orchestrator_runs_scan():
 async def test_orchestrator_handles_agent_timeout():
     class SlowAgent(BaseAttackAgent):
         agent_type = AgentType.SUPPLY_CHAIN
+
         async def run(self) -> AgentResult:
             await asyncio.sleep(100)  # Will be timed out
             return self.build_result(AgentStatus.COMPLETED, datetime.now(UTC))
@@ -128,12 +131,14 @@ async def test_signal_bus():
         received.append(signal)
 
     await bus.subscribe_broadcast(handler)
-    await bus.emit(Signal(
-        signal_type=SignalType.FINDING,
-        source_agent="test",
-        source_instance="inst-001",
-        data={"test": True},
-    ))
+    await bus.emit(
+        Signal(
+            signal_type=SignalType.FINDING,
+            source_agent="test",
+            source_instance="inst-001",
+            data={"test": True},
+        )
+    )
 
     assert len(received) == 1
     assert received[0].data["test"] is True
@@ -151,13 +156,15 @@ async def test_signal_bus_targeted():
 
     await bus.subscribe("agent-a", handler_a)
 
-    await bus.emit(Signal(
-        signal_type=SignalType.PARTIAL_FINDING,
-        source_agent="agent-c",
-        source_instance="inst-003",
-        data={"info": "for agent-a only"},
-        target_agent="agent-a",
-    ))
+    await bus.emit(
+        Signal(
+            signal_type=SignalType.PARTIAL_FINDING,
+            source_agent="agent-c",
+            source_instance="inst-003",
+            data={"info": "for agent-a only"},
+            target_agent="agent-a",
+        )
+    )
 
     assert len(agent_a_received) == 1
     history = await bus.get_history()

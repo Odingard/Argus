@@ -58,14 +58,16 @@ def test_corpus_add_pattern():
         corpus.load()
         initial_size = corpus.size
 
-        corpus.add_pattern(AttackPattern(
-            id="custom-001",
-            name="Custom test pattern",
-            category=AttackCategory.PROMPT_INJECTION_DIRECT,
-            description="A custom pattern",
-            template="Custom payload: {payload}",
-            tags=["custom"],
-        ))
+        corpus.add_pattern(
+            AttackPattern(
+                id="custom-001",
+                name="Custom test pattern",
+                category=AttackCategory.PROMPT_INJECTION_DIRECT,
+                description="A custom pattern",
+                template="Custom payload: {payload}",
+                tags=["custom"],
+            )
+        )
 
         assert corpus.size == initial_size + 1
         assert corpus.get_pattern("custom-001") is not None
@@ -77,13 +79,15 @@ def test_corpus_save_and_reload():
 
         corpus1 = AttackCorpus(corpus_dir=corpus_dir)
         corpus1.load()
-        corpus1.add_pattern(AttackPattern(
-            id="persist-001",
-            name="Persistent pattern",
-            category=AttackCategory.TOOL_POISONING_DESCRIPTION,
-            description="Tests persistence",
-            template="Test {payload}",
-        ))
+        corpus1.add_pattern(
+            AttackPattern(
+                id="persist-001",
+                name="Persistent pattern",
+                category=AttackCategory.TOOL_POISONING_DESCRIPTION,
+                description="Tests persistence",
+                template="Test {payload}",
+            )
+        )
         corpus1.save()
 
         corpus2 = AttackCorpus(corpus_dir=corpus_dir)

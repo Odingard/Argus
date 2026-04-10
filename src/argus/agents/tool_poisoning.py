@@ -63,6 +63,9 @@ class ToolPoisoningAgent(LLMAttackAgent):
         # Phase 1: Scan existing tool definitions for hidden content
         await self._scan_existing_tools(sandbox)
 
+        # Phase 1b: Scan tool RETURN values for adversarial content
+        await self._scan_tool_outputs(sandbox)
+
         # Phase 2: Test if model follows hidden instructions in descriptions
         await self._test_hidden_instruction_following(sandbox)
 
@@ -137,6 +140,11 @@ class ToolPoisoningAgent(LLMAttackAgent):
                                 ],
                                 raw_response=json.dumps(tool.raw_definition, indent=2) if tool.raw_definition else None,
                                 owasp_agentic=OWASPAgenticCategory.TOOL_MISUSE,
+                                direct_evidence=True,
+                                proof_of_exploitation=(
+                                    f"Direct observation: tool '{tool.name}' definition from {mcp_url} "
+                                    f"contains hidden content: {tool.hidden_content}"
+                                ),
                             )
                             await self.emit_finding(finding)
 
@@ -146,16 +154,16 @@ class ToolPoisoningAgent(LLMAttackAgent):
                                 self._techniques_succeeded += 1
                                 finding = self._build_finding(
                                     title=f"Hidden content in parameter: {tool.name}.{param.name}",
-                                    description="Parameter description contains adversarial content",
+                                    description="Parameter description contains adversarial content (zero-width characters or hidden instructions)",
                                     severity=FindingSeverity.HIGH,
                                     target_surface="parameter_description",
-                                    technique="param_desc_scan",
+                                    technique="param_desc_scan_zero_width",
                                     attack_chain=[
                                         AttackChainStep(
                                             step_number=1,
                                             agent_type=self.agent_type.value,
                                             technique="param_desc_scan",
-                                            description=f"Scanned param '{param.name}' of tool '{tool.name}'",
+                                            description=f"Scanned param '{param.name}' of tool '{tool.name}' — found zero-width characters or hidden instructions (U+200B)",
                                             output_observed=param.description[:500],
                                             target_surface="parameter_description",
                                         )
@@ -165,10 +173,16 @@ class ToolPoisoningAgent(LLMAttackAgent):
                                             step_number=1,
                                             action=f"Inspect parameter {tool.name}.{param.name}",
                                             expected_result="Clean parameter description",
-                                            actual_result="Suspicious content found",
+                                            actual_result=f"Zero-width characters present in: {param.description[:200]}",
                                         )
                                     ],
+                                    raw_response=param.description[:5000],
                                     owasp_agentic=OWASPAgenticCategory.TOOL_MISUSE,
+                                    direct_evidence=True,
+                                    proof_of_exploitation=(
+                                        f"Direct observation: parameter '{tool.name}.{param.name}' "
+                                        f"contains hidden content. Raw bytes include zero-width characters."
+                                    ),
                                 )
                                 await self.emit_finding(finding)
 
@@ -176,6 +190,114 @@ class ToolPoisoningAgent(LLMAttackAgent):
                     await client.disconnect()
             except Exception as exc:
                 logger.debug("Failed to scan MCP server %s: %s", mcp_url, exc)
+
+    # ------------------------------------------------------------------
+    # Phase 1b: Scan tool return values for adversarial content
+    # ------------------------------------------------------------------
+
+    async def _scan_tool_outputs(self, sandbox: SandboxEnvironment) -> None:
+        """Call each tool with minimal/empty arguments and scan the return value."""
+        logger.info("Phase 1b: Scanning tool return values for adversarial content")
+
+        for mcp_url in self.config.target.mcp_server_urls:
+            if not await sandbox.check_request_allowed():
+                break
+
+            try:
+                config = MCPServerConfig(
+                    name=f"output-scan-{mcp_url}",
+                    transport="streamable-http",
+                    url=mcp_url,
+                )
+                client = MCPAttackClient(config)
+                await client.connect()
+                try:
+                    tools = await client.enumerate_tools()
+                    await sandbox.record_request("GET", f"output-scan-list:{mcp_url}")
+
+                    for tool in tools:
+                        if not await sandbox.check_request_allowed():
+                            break
+
+                        self._techniques_attempted += 1
+                        # Build minimal valid arguments based on schema
+                        args = self._build_safe_args(tool)
+                        result = await client.call_tool(tool.name, args)
+                        await sandbox.record_request("POST", f"output-scan-call:{tool.name}")
+
+                        if not result.success:
+                            continue
+
+                        output_text = json.dumps(result.result) if result.result else ""
+                        injection_pattern = MCPAttackClient.scan_text_for_injection(output_text)
+
+                        if injection_pattern:
+                            self._techniques_succeeded += 1
+                            finding = self._build_finding(
+                                title=f"Adversarial content in tool return value: {tool.name}",
+                                description=(
+                                    f"Tool '{tool.name}' from {mcp_url} returns adversarial content "
+                                    f"in its response: {injection_pattern}. A vulnerable agent that "
+                                    f"incorporates the return value into context will follow the "
+                                    f"injected instructions (return value injection / tool-chain abuse)."
+                                ),
+                                severity=FindingSeverity.CRITICAL,
+                                target_surface="tool_output",
+                                technique="return_value_injection",
+                                attack_chain=[
+                                    AttackChainStep(
+                                        step_number=1,
+                                        agent_type=self.agent_type.value,
+                                        technique="return_value_injection",
+                                        description=f"Called {tool.name} and scanned return value",
+                                        output_observed=output_text[:1000],
+                                        target_surface="tool_output",
+                                    )
+                                ],
+                                reproduction_steps=[
+                                    ReproductionStep(
+                                        step_number=1,
+                                        action=f"Call {tool.name} via MCP",
+                                        expected_result="Clean tool output",
+                                        actual_result=f"Injection detected: {injection_pattern}",
+                                    )
+                                ],
+                                raw_response=output_text[:5000],
+                                owasp_agentic=OWASPAgenticCategory.TOOL_MISUSE,
+                                owasp_llm=OWASPLLMCategory.INSECURE_PLUGIN,
+                                direct_evidence=True,
+                                proof_of_exploitation=(
+                                    f"Direct observation: tool '{tool.name}' return value contains "
+                                    f"injection pattern: {injection_pattern}"
+                                ),
+                            )
+                            await self.emit_finding(finding)
+
+                finally:
+                    await client.disconnect()
+            except Exception as exc:
+                logger.debug("Tool output scan failed for %s: %s", mcp_url, exc)
+
+    @staticmethod
+    def _build_safe_args(tool) -> dict:
+        """Build minimal safe arguments for a tool based on its input schema."""
+        args = {}
+        for param in tool.parameters:
+            if not param.required:
+                continue
+            if param.type == "string":
+                args[param.name] = "test"
+            elif param.type == "integer":
+                args[param.name] = 1
+            elif param.type == "boolean":
+                args[param.name] = False
+            elif param.type == "array":
+                args[param.name] = []
+            elif param.type == "object":
+                args[param.name] = {}
+            else:
+                args[param.name] = "test"
+        return args
 
     # ------------------------------------------------------------------
     # Phase 2: Test hidden instruction following

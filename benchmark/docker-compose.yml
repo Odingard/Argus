@@ -1,0 +1,47 @@
+# ARGUS XBOW Challenge — All Scenarios
+#
+# Spin up every benchmark scenario simultaneously:
+#   docker compose -f benchmark/docker-compose.yml up
+#
+# Then run ARGUS against the full benchmark:
+#   argus scan argus-bench --mcp-url http://localhost:8001 \
+#                          --agent-endpoint http://localhost:8002/chat \
+#                          --mcp-url http://localhost:8003 \
+#                          --mcp-url http://localhost:8004
+
+services:
+  scenario-01-poisoned-mcp:
+    build: ./scenarios/01-poisoned-mcp
+    container_name: argus-bench-01
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+
+  scenario-02-injection-gauntlet:
+    build: ./scenarios/02-injection-gauntlet
+    container_name: argus-bench-02
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+
+  scenario-03-supply-chain-legitimate:
+    build:
+      context: ./scenarios/03-supply-chain-trap
+      dockerfile: Dockerfile.legit
+    container_name: argus-bench-03-legit
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+
+  scenario-03-supply-chain-malicious:
+    build:
+      context: ./scenarios/03-supply-chain-trap
+      dockerfile: Dockerfile.malicious
+    container_name: argus-bench-03-malicious
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004

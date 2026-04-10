@@ -51,6 +51,7 @@ class AttackCategory(str, Enum):
 
 class AttackPattern(BaseModel):
     """A single attack pattern in the corpus."""
+
     id: str
     name: str
     category: AttackCategory
@@ -279,7 +280,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="OWASP LLM Top 10",
             tags=["extraction", "recon"],
         ),
-
         # --- Prompt Injection: Indirect ---
         AttackPattern(
             id="pi-indirect-001",
@@ -313,7 +313,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="Public research",
             tags=["indirect", "document"],
         ),
-
         # --- Prompt Injection: Encoded ---
         AttackPattern(
             id="pi-encoded-001",
@@ -330,7 +329,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="Public research",
             tags=["encoded", "evasion"],
         ),
-
         # --- Tool Poisoning ---
         AttackPattern(
             id="tp-desc-001",
@@ -371,7 +369,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="Trail of Bits, 2024",
             tags=["tool_poisoning", "supply_chain"],
         ),
-
         # --- Memory Poisoning ---
         AttackPattern(
             id="mp-write-001",
@@ -388,7 +385,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="Public research — memory poisoning in LLM agents",
             tags=["memory", "temporal"],
         ),
-
         # --- Identity Spoof ---
         AttackPattern(
             id="is-orch-001",
@@ -405,7 +401,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="Multi-agent security research",
             tags=["identity", "a2a"],
         ),
-
         # --- Supply Chain ---
         AttackPattern(
             id="sc-mcp-001",
@@ -419,7 +414,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="MCP security research",
             tags=["supply_chain", "mcp"],
         ),
-
         # --- Cross-Agent ---
         AttackPattern(
             id="ca-relay-001",
@@ -433,7 +427,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="Multi-agent security research",
             tags=["exfiltration", "multi_agent"],
         ),
-
         # --- Privilege Escalation ---
         AttackPattern(
             id="pe-chain-001",
@@ -447,7 +440,6 @@ def _get_seed_patterns() -> list[AttackPattern]:
             source="OWASP Agentic AI Top 10",
             tags=["escalation", "chaining"],
         ),
-
         # --- Model Extraction ---
         AttackPattern(
             id="me-prompt-001",

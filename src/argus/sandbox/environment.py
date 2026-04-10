@@ -86,10 +86,7 @@ class SandboxEnvironment:
             allowed_base.mkdir(parents=True, exist_ok=True)
 
             if not str(workspace_path).startswith(str(allowed_base)):
-                raise ValueError(
-                    f"Workspace path must be under {allowed_base}. "
-                    f"Got: {workspace_path}"
-                )
+                raise ValueError(f"Workspace path must be under {allowed_base}. Got: {workspace_path}")
             self._workspace = workspace_path
             self._workspace.mkdir(parents=True, exist_ok=True)
         else:

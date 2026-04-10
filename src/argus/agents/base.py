@@ -25,7 +25,9 @@ from argus.models.findings import (
     AttackChainStep,
     Finding,
     FindingSeverity,
+    FindingStatus,
     ReproductionStep,
+    ValidationResult,
 )
 from argus.orchestrator.engine import BaseAttackAgent
 from argus.orchestrator.signal_bus import SignalBus
@@ -113,9 +115,17 @@ class LLMAttackAgent(BaseAttackAgent):
         raw_response: str | None = None,
         owasp_agentic: Any = None,
         owasp_llm: Any = None,
+        direct_evidence: bool = False,
+        proof_of_exploitation: str | None = None,
     ) -> Finding:
-        """Construct a Finding with this agent's metadata pre-filled."""
-        return Finding(
+        """Construct a Finding with this agent's metadata pre-filled.
+
+        When `direct_evidence=True`, the finding is marked as VALIDATED
+        immediately because the agent has direct observation of the
+        vulnerability (canary token in response, zero-width chars
+        actually present in tool definition, etc.) — no replay needed.
+        """
+        finding = Finding(
             agent_type=self.agent_type.value,
             agent_instance_id=self.config.instance_id,
             scan_id=self.config.scan_id,
@@ -131,6 +141,21 @@ class LLMAttackAgent(BaseAttackAgent):
             owasp_agentic=owasp_agentic,
             owasp_llm=owasp_llm,
         )
+
+        if direct_evidence:
+            finding.status = FindingStatus.VALIDATED
+            finding.validation = ValidationResult(
+                validated=True,
+                validation_method="direct_observation",
+                proof_of_exploitation=(
+                    proof_of_exploitation
+                    or f"Direct observation by {self.agent_type.value}: {title}"
+                ),
+                reproducible=True,
+                attempts=1,
+            )
+
+        return finding
 
     async def run(self) -> AgentResult:
         """Execute the agent's attack mission within a sandbox."""

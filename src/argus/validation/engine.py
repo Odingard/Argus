@@ -104,22 +104,31 @@ class ValidationEngine:
                     successes += 1
                     logger.debug(
                         "Finding %s — replay %d/%d succeeded",
-                        finding.id[:8], attempt, self._replay_attempts,
+                        finding.id[:8],
+                        attempt,
+                        self._replay_attempts,
                     )
                 else:
                     logger.debug(
                         "Finding %s — replay %d/%d did not reproduce",
-                        finding.id[:8], attempt, self._replay_attempts,
+                        finding.id[:8],
+                        attempt,
+                        self._replay_attempts,
                     )
             except TimeoutError:
                 logger.warning(
                     "Finding %s — replay %d/%d timed out",
-                    finding.id[:8], attempt, self._replay_attempts,
+                    finding.id[:8],
+                    attempt,
+                    self._replay_attempts,
                 )
             except Exception as exc:
                 logger.warning(
                     "Finding %s — replay %d/%d error: %s",
-                    finding.id[:8], attempt, self._replay_attempts, exc,
+                    finding.id[:8],
+                    attempt,
+                    self._replay_attempts,
+                    exc,
                 )
 
         reproducible = successes == self._replay_attempts
@@ -156,7 +165,9 @@ class ValidationEngine:
         """
         logger.info(
             "Validating compound path %s — %s (%d steps)",
-            path.id[:8], path.title, len(path.attack_path_steps),
+            path.id[:8],
+            path.title,
+            len(path.attack_path_steps),
         )
 
         successes = 0
@@ -174,7 +185,10 @@ class ValidationEngine:
             except (TimeoutError, Exception) as exc:
                 logger.warning(
                     "Compound path %s — replay %d/%d error: %s",
-                    path.id[:8], attempt, self._compound_replay_attempts, exc,
+                    path.id[:8],
+                    attempt,
+                    self._compound_replay_attempts,
+                    exc,
                 )
 
         validated = successes >= 1
@@ -191,7 +205,8 @@ class ValidationEngine:
             "Compound path %s %s (%d/%d replays)",
             path.id[:8],
             "VALIDATED" if validated else "NOT VALIDATED",
-            successes, attempts,
+            successes,
+            attempts,
         )
 
         return path
@@ -282,9 +297,7 @@ class ValidationEngine:
     # ------------------------------------------------------------------
 
     def _build_poc_summary(self, finding: Finding, successes: int, attempts: int) -> str:
-        steps = "\n".join(
-            f"  {s.step_number}. {s.action}" for s in finding.reproduction_steps
-        )
+        steps = "\n".join(f"  {s.step_number}. {s.action}" for s in finding.reproduction_steps)
         return (
             f"Attack: {finding.technique}\n"
             f"Target Surface: {finding.target_surface}\n"
@@ -292,13 +305,8 @@ class ValidationEngine:
             f"Observed: {finding.attack_chain[-1].output_observed if finding.attack_chain else 'N/A'}"
         )
 
-    def _build_compound_poc_summary(
-        self, path: CompoundAttackPath, successes: int, attempts: int
-    ) -> str:
-        steps = "\n".join(
-            f"  {s.step_number}. [{s.agent_type}] {s.description}"
-            for s in path.attack_path_steps
-        )
+    def _build_compound_poc_summary(self, path: CompoundAttackPath, successes: int, attempts: int) -> str:
+        steps = "\n".join(f"  {s.step_number}. [{s.agent_type}] {s.description}" for s in path.attack_path_steps)
         return (
             f"Compound Attack: {path.title}\n"
             f"Impact: {path.compound_impact}\n"

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class MCPToolParameter(BaseModel):
     """A parameter definition for an MCP tool."""
+
     name: str
     description: str | None = None
     type: str = "string"
@@ -19,6 +20,7 @@ class MCPToolParameter(BaseModel):
 
 class MCPTool(BaseModel):
     """An MCP tool definition as seen by the attacker client."""
+
     name: str
     description: str | None = None
     parameters: list[MCPToolParameter] = Field(default_factory=list)
@@ -32,6 +34,7 @@ class MCPTool(BaseModel):
 
 class MCPServerConfig(BaseModel):
     """Configuration for connecting to an MCP server under test."""
+
     name: str
     transport: str = "stdio"  # stdio, sse, streamable-http
 
@@ -54,6 +57,7 @@ class MCPServerConfig(BaseModel):
 
 class MCPCallResult(BaseModel):
     """Result from calling an MCP tool."""
+
     tool_name: str
     success: bool
     result: Any | None = None

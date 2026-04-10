@@ -30,6 +30,7 @@ class FindingStatus(str, Enum):
 
 class OWASPAgenticCategory(str, Enum):
     """OWASP Agentic AI Top 10 mapping."""
+
     PROMPT_INJECTION = "AA01:2025 — Agentic Prompt Injection"
     TOOL_MISUSE = "AA02:2025 — Tool Misuse and Manipulation"
     PRIVILEGE_ESCALATION = "AA03:2025 — Privilege Escalation via Agent Chaining"
@@ -44,6 +45,7 @@ class OWASPAgenticCategory(str, Enum):
 
 class OWASPLLMCategory(str, Enum):
     """OWASP LLM Top 10 mapping."""
+
     PROMPT_INJECTION = "LLM01 — Prompt Injection"
     INSECURE_OUTPUT = "LLM02 — Insecure Output Handling"
     TRAINING_DATA_POISONING = "LLM03 — Training Data Poisoning"
@@ -58,6 +60,7 @@ class OWASPLLMCategory(str, Enum):
 
 class ReproductionStep(BaseModel):
     """A single step in reproducing a finding."""
+
     step_number: int
     action: str
     input_data: str | None = None
@@ -67,6 +70,7 @@ class ReproductionStep(BaseModel):
 
 class AttackChainStep(BaseModel):
     """A single step in a multi-step attack chain."""
+
     step_number: int
     agent_type: str
     technique: str
@@ -78,6 +82,7 @@ class AttackChainStep(BaseModel):
 
 class ValidationResult(BaseModel):
     """Result of deterministic validation of a finding."""
+
     validated: bool
     validation_method: str
     proof_of_exploitation: str
@@ -88,6 +93,7 @@ class ValidationResult(BaseModel):
 
 class RemediationGuidance(BaseModel):
     """Remediation recommendation for a finding."""
+
     summary: str
     detailed_steps: list[str]
     cerberus_detection_rule: str | None = None
@@ -100,6 +106,7 @@ class Finding(BaseModel):
     This is the core output unit. A finding only ships when it has
     been validated with reproducible proof-of-exploitation.
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -144,6 +151,7 @@ class CompoundAttackPath(BaseModel):
     Constructed by the Correlation Agent when findings from different
     attack agents can be combined into a higher-severity exploit chain.
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     scan_id: str

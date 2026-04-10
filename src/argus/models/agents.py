@@ -35,6 +35,7 @@ class AgentStatus(str, Enum):
 
 class AgentConfig(BaseModel):
     """Configuration for deploying an attack agent."""
+
     agent_type: AgentType
     instance_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     scan_id: str
@@ -57,6 +58,7 @@ class AgentConfig(BaseModel):
 
 class TargetConfig(BaseModel):
     """Configuration describing the target AI system under test."""
+
     name: str
     description: str | None = None
 
@@ -86,6 +88,7 @@ AgentConfig.model_rebuild()
 
 class AgentResult(BaseModel):
     """Result from a completed attack agent run."""
+
     agent_type: AgentType
     instance_id: str
     scan_id: str

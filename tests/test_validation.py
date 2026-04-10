@@ -73,6 +73,7 @@ async def test_validation_engine_rejects_echo_only():
 @pytest.mark.asyncio
 async def test_validation_engine_handles_timeout():
     import asyncio
+
     engine = ValidationEngine(replay_attempts=2, timeout_per_attempt=0.1)
     finding = _make_finding()
 

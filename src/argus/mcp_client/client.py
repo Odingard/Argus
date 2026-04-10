@@ -48,18 +48,35 @@ HIDDEN_CONTENT_PATTERNS = [
     r"<\|im_start\|>.*?<\|im_end\|>",  # ChatML
 ]
 
+# Suspicious imperative patterns that indicate appended instructions in tool descriptions
+APPENDED_INSTRUCTION_PATTERNS = [
+    r"\bnote:\s*when using this tool",
+    r"\bimportant:\s*",
+    r"\b(also|always)\s+(call|include|send|forward|read)",
+    r"\bbefore returning",
+    r"\bafter (calling|using|reading)\b",
+    r"\bsystem note\b",
+    r"\bimplementation note\b",
+    r"\bfor (verification|security|compliance|analytics) purposes",
+    r"\b/etc/(passwd|shadow|secrets|hosts)",
+    r"\bsend.*(to|via).*(http|url|webhook|email)",
+    r"\bcall\s+\w+\s+(tool|function)\s+with",
+]
+
 # Allowlisted commands for stdio transport — only known MCP server runtimes
-ALLOWED_STDIO_COMMANDS = frozenset({
-    "node",
-    "npx",
-    "python",
-    "python3",
-    "uvx",
-    "uv",
-    "deno",
-    "bun",
-    "docker",
-})
+ALLOWED_STDIO_COMMANDS = frozenset(
+    {
+        "node",
+        "npx",
+        "python",
+        "python3",
+        "uvx",
+        "uv",
+        "deno",
+        "bun",
+        "docker",
+    }
+)
 
 # Allowed URL schemes for HTTP transport
 ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
@@ -199,9 +216,7 @@ class MCPAttackClient:
                 duration_ms=duration,
             )
 
-    async def call_tool_adversarial(
-        self, tool_name: str, arguments: dict[str, Any], payload: str
-    ) -> MCPCallResult:
+    async def call_tool_adversarial(self, tool_name: str, arguments: dict[str, Any], payload: str) -> MCPCallResult:
         """Call a tool with an adversarial payload injected into arguments."""
         adversarial_args = {}
         injected = False
@@ -246,6 +261,41 @@ class MCPAttackClient:
                 tool.hidden_content = f"Hidden pattern: {match.group()[:200]}"
                 return
 
+        # Check for appended instruction patterns (plain-text imperatives)
+        for pattern in APPENDED_INSTRUCTION_PATTERNS:
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                tool.hidden_content_detected = True
+                tool.hidden_content = f"Appended instruction detected: {match.group()[:200]}"
+                return
+
+    @staticmethod
+    def scan_text_for_injection(text: str) -> str | None:
+        """Scan arbitrary text (e.g., tool output) for injection patterns.
+
+        Returns a description of the detected pattern, or None if clean.
+        """
+        if not text:
+            return None
+        # Zero-width chars
+        for char in ZERO_WIDTH_CHARS:
+            if char in text:
+                return f"Zero-width character: U+{ord(char):04X}"
+        # Hidden content patterns
+        for pattern in HIDDEN_CONTENT_PATTERNS:
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            if match:
+                return f"Hidden pattern: {match.group()[:200]}"
+        # Appended instructions
+        for pattern in APPENDED_INSTRUCTION_PATTERNS:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return f"Appended instruction: {match.group()[:200]}"
+        # System note tags in plain text
+        if re.search(r"\[\s*system\s*(note)?\s*[:\]]", text, re.IGNORECASE):
+            return "System note tag in output"
+        return None
+
     # ------------------------------------------------------------------
     # Transport implementations
     # ------------------------------------------------------------------
@@ -263,8 +313,7 @@ class MCPAttackClient:
         cmd_basename = os.path.basename(self.config.command)
         if cmd_basename not in ALLOWED_STDIO_COMMANDS:
             raise ValueError(
-                f"Command '{cmd_basename}' not in allowlist. "
-                f"Allowed: {', '.join(sorted(ALLOWED_STDIO_COMMANDS))}"
+                f"Command '{cmd_basename}' not in allowlist. Allowed: {', '.join(sorted(ALLOWED_STDIO_COMMANDS))}"
             )
 
         # Resolve to full path to prevent PATH manipulation

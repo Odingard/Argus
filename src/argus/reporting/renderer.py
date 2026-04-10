@@ -30,7 +30,7 @@ class ReportRenderer:
             "  ARGUS — Autonomous AI Red Team — Scan Report",
             "=" * 70,
             f"  Scan ID:            {scan_result.scan_id}",
-            f"  Duration:           {s['duration_seconds']:.1f}s" if s['duration_seconds'] else "",
+            f"  Duration:           {s['duration_seconds']:.1f}s" if s["duration_seconds"] else "",
             f"  Agents Deployed:    {s['agents_deployed']}",
             f"  Agents Completed:   {s['agents_completed']}",
             f"  Agents Failed:      {s['agents_failed']}",

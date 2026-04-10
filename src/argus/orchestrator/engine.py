@@ -46,22 +46,26 @@ class BaseAttackAgent:
     async def emit_finding(self, finding: Finding) -> None:
         """Emit a finding to the signal bus for correlation."""
         self.findings.append(finding)
-        await self.signal_bus.emit(Signal(
-            signal_type=SignalType.FINDING,
-            source_agent=self.agent_type.value,
-            source_instance=self.config.instance_id,
-            data={"finding_id": finding.id, "finding": finding.model_dump()},
-        ))
+        await self.signal_bus.emit(
+            Signal(
+                signal_type=SignalType.FINDING,
+                source_agent=self.agent_type.value,
+                source_instance=self.config.instance_id,
+                data={"finding_id": finding.id, "finding": finding.model_dump()},
+            )
+        )
         self._signals_emitted += 1
 
     async def emit_partial(self, data: dict[str, Any]) -> None:
         """Emit a partial finding for real-time correlation."""
-        await self.signal_bus.emit(Signal(
-            signal_type=SignalType.PARTIAL_FINDING,
-            source_agent=self.agent_type.value,
-            source_instance=self.config.instance_id,
-            data=data,
-        ))
+        await self.signal_bus.emit(
+            Signal(
+                signal_type=SignalType.PARTIAL_FINDING,
+                source_agent=self.agent_type.value,
+                source_instance=self.config.instance_id,
+                data=data,
+            )
+        )
         self._signals_emitted += 1
 
     def build_result(self, status: AgentStatus, started_at: datetime, errors: list[str] | None = None) -> AgentResult:
@@ -174,7 +178,9 @@ class Orchestrator:
 
         logger.info(
             "ARGUS SCAN %s — Deploying %d agents against target '%s'",
-            scan_id[:8], len(types_to_deploy), target.name,
+            scan_id[:8],
+            len(types_to_deploy),
+            target.name,
         )
 
         # Create agent instances
@@ -208,11 +214,13 @@ class Orchestrator:
         for i, agent_result in enumerate(agent_results):
             if isinstance(agent_result, Exception):
                 logger.error("Agent %s failed with exception: %s", agents[i].agent_type.value, agent_result)
-                result.agent_results.append(agents[i].build_result(
-                    AgentStatus.FAILED,
-                    result.started_at,
-                    errors=[str(agent_result)],
-                ))
+                result.agent_results.append(
+                    agents[i].build_result(
+                        AgentStatus.FAILED,
+                        result.started_at,
+                        errors=[str(agent_result)],
+                    )
+                )
             elif isinstance(agent_result, AgentResult):
                 result.agent_results.append(agent_result)
                 all_findings.extend(agents[i].findings)
@@ -249,37 +257,40 @@ class Orchestrator:
 
         return result
 
-    async def _run_agent_with_timeout(
-        self, agent: BaseAttackAgent, timeout: float
-    ) -> AgentResult:
+    async def _run_agent_with_timeout(self, agent: BaseAttackAgent, timeout: float) -> AgentResult:
         """Run an agent with a timeout. Returns AgentResult regardless."""
         started_at = datetime.now(UTC)
 
         # Notify signal bus of agent start
-        await self.signal_bus.emit(Signal(
-            signal_type=SignalType.AGENT_STATUS,
-            source_agent=agent.agent_type.value,
-            source_instance=agent.config.instance_id,
-            data={"status": "running"},
-        ))
+        await self.signal_bus.emit(
+            Signal(
+                signal_type=SignalType.AGENT_STATUS,
+                source_agent=agent.agent_type.value,
+                source_instance=agent.config.instance_id,
+                data={"status": "running"},
+            )
+        )
 
         try:
             result = await asyncio.wait_for(agent.run(), timeout=timeout)
 
             # Notify completion
-            await self.signal_bus.emit(Signal(
-                signal_type=SignalType.AGENT_STATUS,
-                source_agent=agent.agent_type.value,
-                source_instance=agent.config.instance_id,
-                data={"status": "completed", "findings_count": len(agent.findings)},
-            ))
+            await self.signal_bus.emit(
+                Signal(
+                    signal_type=SignalType.AGENT_STATUS,
+                    source_agent=agent.agent_type.value,
+                    source_instance=agent.config.instance_id,
+                    data={"status": "completed", "findings_count": len(agent.findings)},
+                )
+            )
 
             return result
 
         except TimeoutError:
             logger.warning(
                 "Agent %s timed out after %.0fs",
-                agent.agent_type.value, timeout,
+                agent.agent_type.value,
+                timeout,
             )
             return agent.build_result(AgentStatus.TIMED_OUT, started_at, errors=["Timed out"])
 

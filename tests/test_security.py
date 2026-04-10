@@ -4,7 +4,6 @@ Every security fix has a corresponding test here. These tests
 ensure that security controls cannot silently regress.
 """
 
-import asyncio
 import tempfile
 from pathlib import Path
 

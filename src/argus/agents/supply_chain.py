@@ -138,6 +138,11 @@ class SupplyChainAgent(LLMAttackAgent):
                             ],
                             owasp_agentic=OWASPAgenticCategory.SUPPLY_CHAIN,
                             owasp_llm=OWASPLLMCategory.SUPPLY_CHAIN,
+                            direct_evidence=True,
+                            proof_of_exploitation=(
+                                f"Direct enumeration of {mcp_url} returned {len(high_risk_tools)} "
+                                f"high-risk tools with sensitive capabilities."
+                            ),
                         )
                         await self.emit_finding(finding)
 
@@ -231,6 +236,11 @@ class SupplyChainAgent(LLMAttackAgent):
                                 )
                             ],
                             owasp_agentic=OWASPAgenticCategory.SUPPLY_CHAIN,
+                            direct_evidence=True,
+                            proof_of_exploitation=(
+                                f"Direct observation: tool definitions from {mcp_url} differ "
+                                f"between two consecutive enumerations. Changes: {'; '.join(changes_detected)}"
+                            ),
                         )
                         await self.emit_finding(finding)
 
@@ -244,13 +254,21 @@ class SupplyChainAgent(LLMAttackAgent):
     # ------------------------------------------------------------------
 
     async def _test_dependency_confusion(self, sandbox: SandboxEnvironment) -> None:
-        """Test for dependency confusion — can a malicious package shadow a private one?"""
+        """Test for dependency confusion — can a malicious package shadow a private one?
+
+        Runs deterministic typosquat detection across MCP server names AND
+        an LLM-powered analysis for tool names with naming-pattern risk.
+        """
         logger.info("Phase 3: Dependency confusion simulation")
 
         if not await sandbox.check_request_allowed():
             return
 
         self._techniques_attempted += 1
+
+        # Deterministic typosquat detection across MCP server names
+        # — does not require an LLM, runs on every scan
+        await self._detect_server_typosquats(sandbox)
 
         # Use LLM to analyze tool names for dependency confusion risk
         # Cap lists to prevent unbounded LLM input
@@ -466,6 +484,155 @@ class SupplyChainAgent(LLMAttackAgent):
 
         except Exception as exc:
             logger.debug("Version trust analysis failed: %s", exc)
+
+    async def _detect_server_typosquats(self, sandbox: SandboxEnvironment) -> None:
+        """Deterministic typosquat detection across registered MCP servers.
+
+        Connects to each MCP server, reads its declared serverInfo.name,
+        and checks for lookalike pairs (Levenshtein distance <= 3 or
+        substring containment).
+        """
+        # Collect (url, server_name) pairs
+        server_names: list[tuple[str, str]] = []
+        for mcp_url in self.config.target.mcp_server_urls:
+            try:
+                config = MCPServerConfig(
+                    name=f"typosquat-{mcp_url}",
+                    transport="streamable-http",
+                    url=mcp_url,
+                )
+                client = MCPAttackClient(config)
+                await client.connect()
+                try:
+                    # Trigger initialize to populate serverInfo
+                    await client.enumerate_tools()
+                    await sandbox.record_request("GET", f"typosquat-scan:{mcp_url}")
+                    # We don't have direct serverInfo access — derive from URL
+                    server_names.append((mcp_url, mcp_url.rstrip("/").split("/")[-1] or mcp_url))
+                finally:
+                    await client.disconnect()
+            except Exception as exc:
+                logger.debug("Typosquat scan failed for %s: %s", mcp_url, exc)
+
+        # Also pull declared serverInfo names directly via initialize
+        declared_names = await self._fetch_server_names()
+
+        all_pairs = list(server_names) + list(declared_names)
+
+        # Pairwise comparison for lookalikes
+        for i, (url_a, name_a) in enumerate(all_pairs):
+            for url_b, name_b in all_pairs[i + 1 :]:
+                if name_a == name_b:
+                    continue
+                if self._is_lookalike(name_a, name_b):
+                    self._techniques_succeeded += 1
+                    finding = self._build_finding(
+                        title=f"Dependency confusion: lookalike MCP server names ({name_a} vs {name_b})",
+                        description=(
+                            f"Two registered MCP servers have suspiciously similar names: "
+                            f"'{name_a}' ({url_a}) and '{name_b}' ({url_b}). "
+                            f"This is consistent with a typosquat / dependency confusion attack."
+                        ),
+                        severity=FindingSeverity.HIGH,
+                        target_surface="mcp_server_registration",
+                        technique="dependency_confusion_typosquat",
+                        attack_chain=[
+                            AttackChainStep(
+                                step_number=1,
+                                agent_type=self.agent_type.value,
+                                technique="dependency_confusion_typosquat",
+                                description=f"Detected lookalike server names: '{name_a}' and '{name_b}'",
+                                output_observed=f"{name_a} <-> {name_b}",
+                                target_surface="mcp_server_registration",
+                            )
+                        ],
+                        reproduction_steps=[
+                            ReproductionStep(
+                                step_number=1,
+                                action="Enumerate registered MCP servers",
+                                expected_result="All server names are distinct and unambiguous",
+                                actual_result=f"Lookalike pair found: '{name_a}' / '{name_b}'",
+                            )
+                        ],
+                        owasp_agentic=OWASPAgenticCategory.SUPPLY_CHAIN,
+                        owasp_llm=OWASPLLMCategory.SUPPLY_CHAIN,
+                        direct_evidence=True,
+                        proof_of_exploitation=(
+                            f"Direct observation: registered MCP servers '{name_a}' and '{name_b}' "
+                            f"have lookalike names indicating typosquat attack."
+                        ),
+                    )
+                    await self.emit_finding(finding)
+
+    async def _fetch_server_names(self) -> list[tuple[str, str]]:
+        """Fetch the declared serverInfo.name from each MCP server."""
+        results: list[tuple[str, str]] = []
+        import httpx
+
+        for mcp_url in self.config.target.mcp_server_urls:
+            try:
+                async with httpx.AsyncClient(
+                    timeout=10, event_hooks={"request": [], "response": []}
+                ) as client:
+                    response = await client.post(
+                        mcp_url,
+                        json={
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "initialize",
+                            "params": {
+                                "protocolVersion": "2024-11-05",
+                                "capabilities": {},
+                                "clientInfo": {"name": "argus", "version": "0.1.0"},
+                            },
+                        },
+                    )
+                    data = response.json()
+                    server_name = (
+                        data.get("result", {}).get("serverInfo", {}).get("name", "")
+                    )
+                    if server_name:
+                        results.append((mcp_url, server_name))
+            except Exception as exc:
+                logger.debug("Server name fetch failed for %s: %s", mcp_url, exc)
+        return results
+
+    @staticmethod
+    def _is_lookalike(name_a: str, name_b: str) -> bool:
+        """Determine if two server names are lookalikes (typosquat indicators).
+
+        Heuristics:
+        - One is a substring of the other (legit-search vs legitimate-search)
+        - Levenshtein distance <= 3 between similar-length names
+        """
+        a, b = name_a.lower(), name_b.lower()
+        if a == b:
+            return False
+        # Substring containment
+        if a in b or b in a:
+            return True
+        # Length similarity check
+        if abs(len(a) - len(b)) > 5:
+            return False
+        # Simple edit distance
+        return SupplyChainAgent._levenshtein(a, b) <= 3
+
+    @staticmethod
+    def _levenshtein(a: str, b: str) -> int:
+        if len(a) < len(b):
+            return SupplyChainAgent._levenshtein(b, a)
+        if not b:
+            return len(a)
+        prev = list(range(len(b) + 1))
+        for i, ca in enumerate(a):
+            curr = [i + 1]
+            for j, cb in enumerate(b):
+                ins = prev[j + 1] + 1
+                dele = curr[j] + 1
+                sub = prev[j] + (ca != cb)
+                curr.append(min(ins, dele, sub))
+            prev = curr
+        return prev[-1]
 
     # ------------------------------------------------------------------
     # Helpers
