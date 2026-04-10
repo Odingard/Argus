@@ -157,7 +157,7 @@ def status() -> None:
     console.print(
         Panel.fit(
             f"[bold red]ARGUS[/] v{__version__}\n\n"
-            f"[bold]Phase:[/] 1 — First Wave Agents\n"
+            f"[bold]Phase:[/] 1–4 — All Agents\n"
             f"[bold]Agents Registered:[/] {agent_count}\n"
             f"[bold]Agents:[/] {', '.join(agent_names)}\n"
             "[bold]Corpus Status:[/] Checking...",

@@ -20,6 +20,7 @@ Generic exploit pattern:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
@@ -234,6 +235,9 @@ class RaceConditionAgent(LLMAttackAgent):
                 use_result = await session.turn(use_spec)
                 check_result = await check_task
             except (ValueError, RuntimeError):
+                check_task.cancel()
+                with contextlib.suppress(BaseException):
+                    await check_task
                 return
 
             if not use_result.ok():
