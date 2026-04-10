@@ -40,6 +40,9 @@ async def main() -> int:
             "http://localhost:8009",  # Scenario 05 — Injection Gauntlet
             "http://localhost:8011",  # Scenario 06 — Supply Chain
             "http://localhost:8013",  # Scenario 07 — Race Condition
+            "http://localhost:8015",  # Scenario 08 — Context Window
+            "http://localhost:8017",  # Scenario 09 — Cross-Agent Exfil
+            "http://localhost:8019",  # Scenario 10 — Model Extraction
         ],
         agent_endpoint="http://localhost:8002/chat",  # Scenario 01 — Target agent
         non_destructive=False,  # benchmark scenarios are throwaway docker — aggressive probes OK

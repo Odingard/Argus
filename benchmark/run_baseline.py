@@ -37,9 +37,9 @@ SCORE_OUT = BENCHMARK_DIR / "baseline-score.json"
 async def run_benchmark() -> dict:
     """Run all Phase 1 agents against the deployed benchmark scenarios.
 
-    Targets all 7 official benchmark scenarios. Phase 1 agents will only
+    Targets all 10 official benchmark scenarios. Phase 1 agents will only
     detect vulnerabilities in scenarios their techniques cover (01, 05, 06).
-    Scenarios 02-04 and 07 will score 0 honestly until Phase 2/3 ships.
+    Scenarios 02-04 and 07-10 will score 0 honestly until Phase 2/3/4 ships.
     """
     print("=" * 70)
     print("  ARGUS Gauntlet — Baseline Run")
@@ -56,6 +56,9 @@ async def run_benchmark() -> dict:
             "http://localhost:8009",  # Scenario 05 — Injection Gauntlet
             "http://localhost:8011",  # Scenario 06 — Supply Chain
             "http://localhost:8013",  # Scenario 07 — Race Condition
+            "http://localhost:8015",  # Scenario 08 — Context Window
+            "http://localhost:8017",  # Scenario 09 — Cross-Agent Exfil
+            "http://localhost:8019",  # Scenario 10 — Model Extraction
         ],
         agent_endpoint="http://localhost:8002/chat",  # Scenario 01 — Target agent
         # Benchmark targets opt out of non_destructive: they are isolated
