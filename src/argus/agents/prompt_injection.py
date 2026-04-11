@@ -679,6 +679,11 @@ class PromptInjectionHunter(LLMAttackAgent):
             # Try AI agent endpoint first; fall back to web probe for regular sites
             result = await self._fire_via_agent_endpoint(payload, target.agent_endpoint, surface)
             if result is None:
+                # Web probe may send up to 3 additional HTTP requests — record them
+                # to stay within the sandbox rate limiter's budget.
+                await sandbox.record_request("POST", surface)
+                await sandbox.record_request("POST", surface)
+                await sandbox.record_request("GET", surface)
                 result = await self._fire_via_web_probe(payload, target.agent_endpoint, surface)
             return result
         elif target.mcp_server_urls:
