@@ -65,11 +65,9 @@ class TestTierResolution:
         monkeypatch.setenv("ARGUS_TIER", "core")
         monkeypatch.setenv("ARGUS_LICENSE_KEY", "test-key-12345")
         reset_tier()
-        # core env var doesn't match "enterprise", so falls through to licence key
-        # but since ARGUS_TIER is set to something other than enterprise, it falls through
         tier = current_tier()
-        # licence key still triggers enterprise when ARGUS_TIER != "enterprise"
-        assert tier.is_enterprise
+        # Explicit ARGUS_TIER=core takes precedence over licence key
+        assert tier.is_core
 
     def test_singleton_caching(self) -> None:
         t1 = current_tier()

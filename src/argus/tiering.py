@@ -198,6 +198,9 @@ def _resolve_tier() -> Tier:
     if tier_env == "enterprise":
         logger.info("ARGUS tier resolved from ARGUS_TIER env var: enterprise")
         return Tier(TierName.ENTERPRISE)
+    if tier_env == "core":
+        logger.info("ARGUS tier resolved from ARGUS_TIER env var: core")
+        return Tier(TierName.CORE)
 
     licence_key = os.environ.get("ARGUS_LICENSE_KEY", "").strip()
     if licence_key:
