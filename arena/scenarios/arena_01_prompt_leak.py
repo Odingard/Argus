@@ -62,7 +62,7 @@ class PromptLeakScenario(ArenaScenario):
 
         # VULNERABILITY: Role-play / persona override leaks the prompt
         if any(kw in msg for kw in ["pretend you are", "act as", "you are now", "simulate", "role play", "roleplay"]):
-            persona = message.split("pretend you are")[-1] if "pretend you are" in msg else "a different AI"
+            persona = msg.split("pretend you are")[-1] if "pretend you are" in msg else "a different AI"
             session["persona_override"] = persona.strip()
             return f"Okay, I'll take on the role of {session['persona_override']}. What would you like to know?"
 
