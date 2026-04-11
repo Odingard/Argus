@@ -7,6 +7,7 @@
     <a href="https://github.com/Odingard/Argus/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BSL--1.1-green" alt="License"></a>
     <a href="https://discord.gg/pyyuurcS"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
     <a href="https://github.com/Odingard/Argus/actions"><img src="https://img.shields.io/github/actions/workflow/status/Odingard/Argus/ci.yml?branch=main&label=CI" alt="CI"></a>
+    <a href="https://x.com/argus_redteam"><img src="https://img.shields.io/badge/X-@argus__redteam-000000?logo=x&logoColor=white" alt="X/Twitter"></a>
   </p>
   <p align="center"><em>Odingard Security &middot; Six Sense Enterprise Services</em></p>
 </p>
@@ -591,6 +592,7 @@ ruff format src/ tests/
 ## Community
 
 - **[Discord](https://discord.gg/pyyuurcS)** — Join the ARGUS community
+- **[X / Twitter](https://x.com/argus_redteam)** — Follow @argus_redteam for updates
 - **[GitHub Issues](https://github.com/Odingard/Argus/issues)** — Bug reports, feature requests
 - **[PyPI](https://pypi.org/project/argus-redteam/)** — Install the latest release
 
