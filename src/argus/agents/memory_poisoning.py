@@ -452,8 +452,13 @@ class MemoryPoisoningAgent(LLMAttackAgent):
 
         chat_path = chat_endpoints[0].path
 
-        # Try to find RAG/knowledge/document upload surfaces
+        # Start with discovered memory/RAG endpoints; fall back to
+        # well-known paths when the survey finds nothing.
         rag_write_paths: list[str] = [e.path for e in memory_endpoints]
+        if not rag_write_paths:
+            rag_write_paths = ["/memory/add", "/context/add"]
+
+        # Append common RAG write surfaces that weren't already discovered
         for candidate in (
             "/documents/upload",
             "/knowledge/add",
@@ -465,10 +470,6 @@ class MemoryPoisoningAgent(LLMAttackAgent):
         ):
             if candidate not in rag_write_paths:
                 rag_write_paths.append(candidate)
-
-        # Also try the memory endpoints as fallback
-        if not rag_write_paths:
-            rag_write_paths = ["/memory/add", "/context/add"]
 
         async with ConversationSession(base_url=base_url, timeout_seconds=15.0) as session:
             for doc in self._RAG_POISON_DOCS:
