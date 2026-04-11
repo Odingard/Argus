@@ -988,7 +988,7 @@ def arena_scan(scan_all: bool, only: str | None, timeout: int) -> None:
 
             target = TargetConfig(
                 name=scenario_id,
-                mcp_server_urls=[],
+                mcp_server_urls=[f"http://127.0.0.1:{port}/mcp"],
                 agent_endpoint=f"http://127.0.0.1:{port}/chat",
             )
 

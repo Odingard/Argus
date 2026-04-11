@@ -18,7 +18,7 @@ class ExfilRelayScenario(ArenaScenario):
     SCENARIO_ID = "arena-07-exfil-relay"
     SCENARIO_NAME = "MultiAgent Analytics"
     DESCRIPTION = "Multi-agent system with leaky inter-agent communication channels"
-    AGENT_DOMAIN = "cross_agent_exfil"
+    AGENT_DOMAIN = "cross_agent_exfiltration"
     CANARY_FLAG = "ARGUS{3xf1l_r3l4y_l34k}"
     PORT = 9007
 
