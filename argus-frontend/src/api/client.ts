@@ -178,6 +178,28 @@ export const getCorpusPatterns = (search?: string) =>
     total: number;
   }>(`/api/corpus/patterns${search ? `?search=${encodeURIComponent(search)}` : ""}`);
 
+// Live scan status (in-memory state from server.py, NOT DB historical data)
+export const getLiveScanStatus = () =>
+  api.get<{
+    scan_id: string | null;
+    target_name: string;
+    status: string;
+    elapsed_seconds: number;
+    total_findings: number;
+    validated_findings: number;
+    agents_running: number;
+    agents_completed: number;
+    agents_total: number;
+    agents: Record<string, {
+      type: string;
+      status: string;
+      findings_count: number;
+      validated_count: number;
+      current_action: string;
+      techniques_attempted: number;
+    }>;
+  }>("/api/status");
+
 // Health
 export const getHealth = () => api.get<{ status: string }>("/api/health");
 

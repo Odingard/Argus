@@ -1058,11 +1058,9 @@ def create_production_router() -> APIRouter:
     async def corpus_patterns(
         search: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        """Return attack corpus patterns from the built-in corpus modules."""
-        # Gather patterns from registered agents
-        from argus.agents import AGENT_REGISTRY
+        """Return attack corpus patterns from the corpus data directory."""
+        from argus.corpus.manager import AttackCorpus
 
-        patterns: list[dict[str, Any]] = []
         agent_code_map = {
             "prompt_injection_hunter": "PI-01",
             "tool_poisoning": "TP-02",
@@ -1078,44 +1076,49 @@ def create_production_router() -> APIRouter:
             "memory_boundary_collapse": "MB-12",
         }
 
-        for agent_type, agent_cls in AGENT_REGISTRY.items():
-            agent_name = agent_type.value if hasattr(agent_type, "value") else str(agent_type)
-            code = agent_code_map.get(agent_name, agent_name)
-            try:
-                # Each agent class has TECHNIQUES or technique methods
-                techniques = getattr(agent_cls, "TECHNIQUES", None) or []
-                if isinstance(techniques, dict):
-                    technique_list = list(techniques.keys())
-                elif isinstance(techniques, list | tuple):
-                    technique_list = [str(t) for t in techniques]
-                else:
-                    technique_list = []
+        corpus = AttackCorpus()
+        corpus.load()
+        all_patterns = corpus.get_patterns()
 
-                for i, tech_name in enumerate(technique_list):
-                    pattern_id = f"cp-{agent_name[:3]}-{i + 1:03d}"
-                    patterns.append(
-                        {
-                            "id": pattern_id,
-                            "name": tech_name.replace("_", " ").title(),
-                            "category": agent_name,
-                            "agent": code,
-                            "effectiveness": 0,
-                            "timesUsed": 0,
-                            "lastUsed": None,
-                            "description": f"Attack technique from {code}: {tech_name}",
-                        }
-                    )
-            except Exception:  # noqa: S110, S112
-                continue
+        patterns: list[dict[str, Any]] = []
+        for p in all_patterns:
+            # Determine agent code from the pattern's agent_types list
+            agent_code = "—"
+            category_key = p.category.value.split(".")[0]
+            for agent_type in p.agent_types:
+                if agent_type in agent_code_map:
+                    agent_code = agent_code_map[agent_type]
+                    break
+            # Fallback: derive from category prefix
+            if agent_code == "—":
+                for key, code in agent_code_map.items():
+                    if key.startswith(category_key):
+                        agent_code = code
+                        break
+
+            effectiveness = round(p.success_rate * 100) if p.times_used > 0 else 0
+            patterns.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "category": p.category.value,
+                    "agent": agent_code,
+                    "effectiveness": effectiveness,
+                    "timesUsed": p.times_used,
+                    "lastUsed": None,
+                    "description": p.description,
+                }
+            )
 
         if search:
             search_lower = search.lower()
             patterns = [
-                p
-                for p in patterns
-                if search_lower in p["name"].lower()
-                or search_lower in p["category"].lower()
-                or search_lower in p["agent"].lower()
+                pat
+                for pat in patterns
+                if search_lower in pat["name"].lower()
+                or search_lower in pat["category"].lower()
+                or search_lower in pat["agent"].lower()
+                or search_lower in pat["description"].lower()
             ]
 
         return {"patterns": patterns, "total": len(patterns)}

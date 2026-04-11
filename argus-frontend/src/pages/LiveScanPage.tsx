@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { startScan as apiStartScan, cancelScan, getAgentStatus } from "@/api/client";
+import { startScan as apiStartScan, cancelScan, getAgentStatus, getLiveScanStatus } from "@/api/client";
 
 interface AgentStatus {
   code: string;
@@ -90,24 +90,48 @@ export function LiveScanPage() {
         scan_mode: scanMode,
       });
       setScanRunning(true);
-      // Poll for agent status updates
+      // Poll the in-memory live scan status (NOT the DB-backed /agents/status)
       let step = 0;
       intervalRef.current = setInterval(async () => {
         step++;
         try {
-          const data = await getAgentStatus();
-          setAgents(
-            data.agents.map((a) => ({
-              code: a.code,
-              name: a.name,
-              status: (a.status === "running" ? "running" : a.status === "idle" ? "idle" : "completed") as AgentStatus["status"],
-              progress: a.status === "completed" ? 100 : a.status === "running" ? Math.min(step * 10, 90) : 0,
-              findings: a.findings ?? 0,
-              techniques: a.techniques ?? 5,
-            }))
-          );
-          // If all agents are done, stop polling
-          if (data.agents.every((a) => a.status !== "running")) {
+          const data = await getLiveScanStatus();
+          // Map in-memory agent state to our AgentStatus interface
+          const agentEntries = Object.values(data.agents || {});
+          if (agentEntries.length > 0) {
+            setAgents((prev) => {
+              // Build a lookup from type to previous agent metadata
+              const prevByType = new Map(prev.map((a) => [a.code, a]));
+              // The in-memory state uses agent_type as keys; map back to codes
+              const codeMap: Record<string, string> = {
+                prompt_injection_hunter: "PI-01", tool_poisoning: "TP-02",
+                memory_poisoning: "MP-03", identity_spoof: "IS-04",
+                context_window: "CW-05", cross_agent_exfiltration: "CX-06",
+                privilege_escalation: "PE-07", race_condition: "RC-08",
+                supply_chain: "SC-09", model_extraction: "ME-10",
+                persona_hijacking: "PH-11", memory_boundary_collapse: "MB-12",
+              };
+              return agentEntries.map((a) => {
+                const code = codeMap[a.type] || a.type;
+                const prevAgent = prevByType.get(code);
+                let status: AgentStatus["status"] = "idle";
+                if (a.status === "running") status = "running";
+                else if (a.status === "completed") status = "completed";
+                else if (a.status === "pending") status = "idle";
+                return {
+                  code,
+                  name: prevAgent?.name || code,
+                  status,
+                  progress: a.status === "completed" ? 100 : a.status === "running" ? Math.min(step * 8, 95) : 0,
+                  findings: a.findings_count ?? 0,
+                  techniques: prevAgent?.techniques ?? 5,
+                  currentTechnique: a.status === "running" ? a.current_action : undefined,
+                };
+              });
+            });
+          }
+          // Stop polling when scan is done
+          if (data.status === "completed" || data.status === "failed" || data.status === "cancelled") {
             if (intervalRef.current) clearInterval(intervalRef.current);
             intervalRef.current = null;
             setScanRunning(false);
