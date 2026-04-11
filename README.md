@@ -249,6 +249,7 @@ argus alec-export "Target Name" \
 | `argus auth create-key` | Create an API key (admin/operator/viewer) |
 | `argus auth list-keys` | List all API keys |
 | `argus auth revoke-key` | Revoke an API key |
+| `argus tier` | Show active tier and feature matrix |
 | `argus db-status` | Show database health and table counts |
 | `argus test-target start` | Start the mock vulnerable AI target |
 | `argus test-target status` | Check mock target status |
@@ -295,6 +296,47 @@ ARGUS persists all scan data to a SQLAlchemy-backed database:
 | `api_keys` | API keys with roles, expiry, usage tracking |
 
 **Default:** SQLite at `~/.argus/argus.db` (zero-config). For production, set `ARGUS_DATABASE_URL` to a PostgreSQL connection string.
+
+---
+
+## Core vs Enterprise
+
+ARGUS ships in two tiers. **The full attack engine is open-source.** All 12 agents, every technique, and the Correlation Engine are included in Core. Enterprise gates the output infrastructure — not the offensive capability.
+
+| Feature | Core (Free) | Enterprise |
+|---------|:-----------:|:----------:|
+| **All 12 Attack Agents** | ✓ | ✓ |
+| **Correlation Engine** | ✓ | ✓ |
+| **VERDICT WEIGHT™ Scoring** | ✓ | ✓ |
+| **Attack Corpus** | ✓ | ✓ |
+| **Callback Beacon Server** | ✓ | ✓ |
+| **CERBERUS Detection Rules** | ✓ | ✓ |
+| **JSON Reports** | ✓ | ✓ |
+| **HTML Reports** | ✓ | ✓ |
+| **CLI Interface** | ✓ | ✓ |
+| **Web Dashboard** | ✓ | ✓ |
+| **React Frontend** | ✓ | ✓ |
+| **ARGUS Arena (12 targets)** | ✓ | ✓ |
+| ALEC Evidence Packages | — | ✓ |
+| PDF Executive Reports | — | ✓ |
+| SIEM Integration (Splunk, Sentinel) | — | ✓ |
+| Scheduled / Recurring Scans | — | ✓ |
+| Multi-Tenant Support | — | ✓ |
+| PostgreSQL Backend | — | ✓ |
+| SSO / SAML Authentication | — | ✓ |
+| Custom Branding | — | ✓ |
+| Priority Support | — | ✓ |
+
+```bash
+# Check your current tier
+argus tier
+
+# Activate Enterprise via environment variable
+export ARGUS_TIER=enterprise
+
+# Or provide a licence key
+export ARGUS_LICENSE_KEY=your-key-here
+```
 
 ---
 
@@ -449,11 +491,13 @@ argus-frontend/               # Production React frontend
 | **Phase 5 — Advanced Agents** | ✅ Complete | Persona Hijacking, Memory Boundary Collapse, test harness |
 | **Production Infrastructure** | ✅ Complete | Database, auth/RBAC, scan persistence, rate limiter, HTML reports |
 | **Production Frontend** | ✅ Complete | React/TypeScript, 16 pages, login, dashboard, targets, findings |
-| **Phase 6 — Live API Integration** | 🔲 Next | Connect frontend to live backend APIs (currently mock data) |
-| **Phase 7 — Enterprise Features** | 🔲 Planned | Scheduled scans, alerting, baseline management, multi-tenant |
+| **Tiering System** | ✅ Complete | Core/Enterprise feature gates, ALEC/PDF/SIEM gating, `argus tier` command |
+| **Callback Beacon Server** | ✅ Complete | Real exfiltration path verification via HTTP beacon callbacks |
+| **Phase 6 — Vertical Deepening** | 🔲 Next | Deeper techniques across all 12 agents |
+| **Phase 7 — Enterprise Features** | 🔲 Planned | Scheduled scans, PDF reports, SIEM integrations, multi-tenant |
 | **Phase 8 — Pilots** | 🔲 Planned | First paying enterprise customer |
 
-**Current Status:** All 12 agents operational. Production frontend, database, auth, and CLI complete. 163 tests passing. Ready for live API integration and enterprise pilot preparation.
+**Current Status:** All 12 agents operational. Tiering system enforced. 195 tests passing across Python 3.11/3.12/3.13. Ready for public launch.
 
 ---
 
@@ -494,6 +538,8 @@ argus-frontend/               # Production React frontend
 | `OPENAI_API_KEY` | OpenAI API key for GPT-based agents | — |
 | `ARGUS_DATABASE_URL` | Database connection string | `sqlite:///~/.argus/argus.db` |
 | `ARGUS_WEB_TOKEN` | Bearer token for the legacy web dashboard | auto-generated |
+| `ARGUS_TIER` | Active tier: `core` (default) or `enterprise` | `core` |
+| `ARGUS_LICENSE_KEY` | Enterprise licence key (presence activates enterprise) | — |
 | `ARGUS_WEB_ALLOW_ORIGIN` | Additional CORS origin for the frontend | — |
 | `VITE_API_URL` | Backend API URL for the React frontend | `http://localhost:8765` |
 
