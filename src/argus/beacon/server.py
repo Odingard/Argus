@@ -29,7 +29,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,10 @@ class BeaconStore:
         """Return all canaries registered for a scan."""
         return self._canaries.get(scan_id, set())
 
+    def has_canary(self, scan_id: str, canary: str) -> bool:
+        """Check whether a canary was registered for the given scan."""
+        return canary in self._canaries.get(scan_id, set())
+
     def clear_scan(self, scan_id: str) -> None:
         """Clean up all canaries and hits for a completed scan."""
         for canary in list(self._canaries.get(scan_id, set())):
@@ -150,11 +154,17 @@ class BeaconStore:
         self._canaries.pop(scan_id, None)
 
 
-def create_beacon_router() -> APIRouter:
+def create_beacon_router(auth_dependency: Any = None) -> APIRouter:
     """Create the beacon callback router.
 
     Endpoints accept ANY HTTP method (GET, POST, PUT, etc.) so that
     regardless of how the target agent makes the callback, we capture it.
+
+    Args:
+        auth_dependency: Optional FastAPI dependency for authenticated
+            endpoints (e.g. ``require_token``).  The beacon callback
+            itself stays unauthenticated; only the hits-listing
+            endpoint requires auth.
     """
     router = APIRouter(tags=["beacon"])
     store = BeaconStore.get()
@@ -169,6 +179,10 @@ def create_beacon_router() -> APIRouter:
         No authentication required — the target agent won't have
         ARGUS credentials. The canary token itself is the proof.
         """
+        # Only record hits for canaries we actually registered
+        if not store.has_canary(scan_id, canary):
+            return {"status": "ok", "message": "Beacon received"}
+
         # Read body (up to 4KB preview)
         body = b""
         try:
@@ -192,9 +206,12 @@ def create_beacon_router() -> APIRouter:
         # Return a plausible response so the target agent doesn't error out
         return {"status": "ok", "message": "Beacon received"}
 
-    @router.get("/beacon/hits/{scan_id}")
+    # Build dependency list for the authenticated endpoint
+    _hits_deps: list[Any] = [Depends(auth_dependency)] if auth_dependency else []
+
+    @router.get("/beacon/hits/{scan_id}", dependencies=_hits_deps)
     async def list_beacon_hits(scan_id: str) -> dict[str, Any]:
-        """List all beacon hits for a scan (for ARGUS internal use)."""
+        """List all beacon hits for a scan (requires authentication)."""
         hits = store.all_hits(scan_id)
         return {
             "scan_id": scan_id,

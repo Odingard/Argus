@@ -399,7 +399,7 @@ def create_app() -> FastAPI:
     try:
         from argus.beacon.server import create_beacon_router
 
-        app.include_router(create_beacon_router())
+        app.include_router(create_beacon_router(auth_dependency=require_token))
         logger.info("Beacon callback router mounted at /beacon/")
     except Exception as exc:
         logger.warning("Could not initialize beacon router: %s", type(exc).__name__)
