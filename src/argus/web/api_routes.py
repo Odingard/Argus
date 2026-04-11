@@ -101,6 +101,10 @@ class TargetUpdate(BaseModel):
         return _validate_target_endpoint(v)
 
 
+class FindingStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(open|triaged|resolved|false_positive|unvalidated|validated)$")
+
+
 class APIKeyCreate(BaseModel):
     name: str = Field(..., max_length=200)
     role: str = Field(default="viewer", pattern="^(admin|operator|viewer)$")
@@ -652,24 +656,19 @@ def create_production_router() -> APIRouter:
             session.close()
 
     @router.put("/findings/{finding_id}/status", dependencies=[Depends(require_role("write"))])
-    async def update_finding_status(finding_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def update_finding_status(finding_id: str, body: FindingStatusUpdate) -> dict[str, Any]:
         """Update the triage status of a finding."""
         from argus.db.models import DBFinding
         from argus.db.session import get_session
 
-        new_status = body.get("status")
-        valid_statuses = {"open", "triaged", "resolved", "false_positive", "unvalidated", "validated"}
-        if new_status not in valid_statuses:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid status. Must be one of: {', '.join(sorted(valid_statuses))}"
-            )
+        new_status = body.status
 
         session = get_session()
         try:
             f = session.get(DBFinding, finding_id)
             if f is None:
                 raise HTTPException(status_code=404, detail="Finding not found")
-            f.status = new_status
+            f.status = new_status  # type: ignore[assignment]
             session.commit()
             return {"status": "updated", "finding_id": finding_id, "new_status": new_status}
         finally:

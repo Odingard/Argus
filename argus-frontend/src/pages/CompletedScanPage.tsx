@@ -29,7 +29,7 @@ interface CompletedScan {
   date: string;
   duration: string;
   agents: number;
-  findings: { critical: number; high: number; medium: number; low: number };
+  totalFindings: number;
   status: string;
 }
 
@@ -56,12 +56,7 @@ export function CompletedScanPage() {
             date: String(s.created_at ?? s.date ?? ""),
             duration: s.duration_seconds ? `${Math.floor(Number(s.duration_seconds) / 60)}m ${Math.round(Number(s.duration_seconds) % 60)}s` : String(s.duration ?? "N/A"),
             agents: Number(s.agents_deployed ?? s.agents ?? s.agent_count ?? 0),
-            findings: {
-              critical: Number((s.findings as Record<string, unknown>)?.critical ?? s.critical ?? 0),
-              high: Number((s.findings as Record<string, unknown>)?.high ?? s.high ?? 0),
-              medium: Number((s.findings as Record<string, unknown>)?.medium ?? s.medium ?? 0),
-              low: Number((s.findings as Record<string, unknown>)?.low ?? s.low ?? 0),
-            },
+            totalFindings: Number(s.total_findings ?? 0),
             status: String(s.status ?? "completed"),
           }))
         );
@@ -74,7 +69,7 @@ export function CompletedScanPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [search]);
+  }, []);
 
   if (loading && scans.length === 0) {
     return (<div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>);
@@ -154,11 +149,6 @@ export function CompletedScanPage() {
             </TableHeader>
             <TableBody>
               {filtered.map((scan) => {
-                const total =
-                  scan.findings.critical +
-                  scan.findings.high +
-                  scan.findings.medium +
-                  scan.findings.low;
                 return (
                   <TableRow key={scan.id}>
                     <TableCell className="font-mono text-xs">{scan.id}</TableCell>
@@ -169,15 +159,7 @@ export function CompletedScanPage() {
                     <TableCell className="text-sm">{scan.duration}</TableCell>
                     <TableCell>{scan.agents}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        {scan.findings.critical > 0 && (
-                          <Badge className="bg-red-600 text-xs">{scan.findings.critical}C</Badge>
-                        )}
-                        {scan.findings.high > 0 && (
-                          <Badge className="bg-orange-600 text-xs">{scan.findings.high}H</Badge>
-                        )}
-                        <span className="text-xs text-muted-foreground">{total} total</span>
-                      </div>
+                      <span className="text-sm font-medium">{scan.totalFindings} findings</span>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="gap-1 text-green-400">
