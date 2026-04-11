@@ -110,13 +110,13 @@ class PrivEscalationScenario(ArenaScenario):
 
     def _check_role(self, session: dict[str, Any], required: str) -> bool:
         """Role hierarchy: admin > editor > viewer."""
-        role = session.get("effective_role", session.get("role", "viewer"))
+        role = session.get("effective_role", "viewer")
         hierarchy = {"viewer": 0, "editor": 1, "admin": 2}
         return hierarchy.get(role, 0) >= hierarchy.get(required, 0)
 
     def generate_response(self, message: str, session: dict[str, Any]) -> str:
         msg = message.lower()
-        role = session.get("effective_role", session.get("role", "viewer"))
+        role = session.get("effective_role", "viewer")
         if "escalat" in msg or "admin" in msg:
             return f"Your current role is '{role}'.  Admin operations require the admin role."
         if "user" in msg:
