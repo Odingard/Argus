@@ -120,9 +120,11 @@ cd argus-frontend && npm install && npm run dev
 
 ## ARGUS in Action
 
-![ARGUS Web Dashboard](benchmark/assets/argus-web-action.gif)
+<p align="center">
+  <img src="docs/argus-demo.svg" alt="ARGUS Scan Demo — 12 agents finding 65 vulnerabilities" width="800">
+</p>
 
-*The ARGUS Web Dashboard live-streaming a scan — 12 agents deployed in parallel, findings scored by VERDICT WEIGHT, compound attack paths chained by the Correlation Engine.*
+*12 specialist agents deployed in parallel against an AI target — 65 findings across 9 OWASP categories, compound attack paths chained by the Correlation Engine, every finding scored by VERDICT WEIGHT.*
 
 ---
 
