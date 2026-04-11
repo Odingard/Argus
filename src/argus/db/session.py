@@ -1,7 +1,7 @@
 """Database session management for ARGUS.
 
 Provides engine creation, session factory, and table initialization.
-Default: SQLite at ~/.argus/argus.db (configurable via ARGUS_DB_URL).
+Default: SQLite at ~/.argus/argus.db (configurable via ARGUS_DATABASE_URL).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ _session_factory: sessionmaker[Session] | None = None
 
 def _get_db_url() -> str:
     """Resolve database URL from environment or default."""
-    url = os.environ.get("ARGUS_DB_URL", "").strip()
+    url = os.environ.get("ARGUS_DATABASE_URL", "").strip()
     if url:
         return url
     # Default to SQLite in ~/.argus/
