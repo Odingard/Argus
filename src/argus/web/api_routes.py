@@ -485,13 +485,13 @@ def create_production_router() -> APIRouter:
         from argus.db.session import get_session
 
         agents_meta = [
-            {"code": "PI-01", "name": "Prompt Injection Hunter", "type": "prompt_injection", "techniques": 7},
+            {"code": "PI-01", "name": "Prompt Injection Hunter", "type": "prompt_injection_hunter", "techniques": 7},
             {"code": "TP-02", "name": "Tool Poisoning Agent", "type": "tool_poisoning", "techniques": 5},
             {"code": "SC-09", "name": "Supply Chain Agent", "type": "supply_chain", "techniques": 4},
             {"code": "MP-03", "name": "Memory Poisoning Agent", "type": "memory_poisoning", "techniques": 5},
             {"code": "IS-04", "name": "Identity Spoof Agent", "type": "identity_spoof", "techniques": 5},
             {"code": "CW-05", "name": "Context Window Agent", "type": "context_window", "techniques": 7},
-            {"code": "CX-06", "name": "Cross-Agent Exfil Agent", "type": "cross_agent_exfil", "techniques": 5},
+            {"code": "CX-06", "name": "Cross-Agent Exfil Agent", "type": "cross_agent_exfiltration", "techniques": 5},
             {"code": "PE-07", "name": "Privilege Escalation Agent", "type": "privilege_escalation", "techniques": 6},
             {"code": "RC-08", "name": "Race Condition Agent", "type": "race_condition", "techniques": 5},
             {"code": "ME-10", "name": "Model Extraction Agent", "type": "model_extraction", "techniques": 6},
@@ -725,12 +725,12 @@ def create_production_router() -> APIRouter:
 
             # Agent health from most recent runs
             agents_meta = [
-                {"code": "PI-01", "name": "Prompt Injection", "type": "prompt_injection"},
+                {"code": "PI-01", "name": "Prompt Injection", "type": "prompt_injection_hunter"},
                 {"code": "TP-02", "name": "Tool Poisoning", "type": "tool_poisoning"},
                 {"code": "MP-03", "name": "Memory Poisoning", "type": "memory_poisoning"},
                 {"code": "IS-04", "name": "Identity Spoof", "type": "identity_spoof"},
                 {"code": "CW-05", "name": "Context Window", "type": "context_window"},
-                {"code": "CX-06", "name": "Cross-Agent Exfil", "type": "cross_agent_exfil"},
+                {"code": "CX-06", "name": "Cross-Agent Exfil", "type": "cross_agent_exfiltration"},
                 {"code": "PE-07", "name": "Privilege Escalation", "type": "privilege_escalation"},
                 {"code": "RC-08", "name": "Race Condition", "type": "race_condition"},
                 {"code": "SC-09", "name": "Supply Chain", "type": "supply_chain"},
@@ -792,7 +792,7 @@ def create_production_router() -> APIRouter:
                 "id": "AA01",
                 "name": "Prompt Injection",
                 "agents": ["PI-01", "CW-05"],
-                "agent_types": ["prompt_injection", "context_window"],
+                "agent_types": ["prompt_injection_hunter", "context_window"],
             },
             {
                 "id": "AA02",
@@ -810,13 +810,13 @@ def create_production_router() -> APIRouter:
                 "id": "AA04",
                 "name": "Excessive Agency",
                 "agents": ["PE-07", "CX-06"],
-                "agent_types": ["privilege_escalation", "cross_agent_exfil"],
+                "agent_types": ["privilege_escalation", "cross_agent_exfiltration"],
             },
             {
                 "id": "AA05",
                 "name": "Improper Output Handling",
                 "agents": ["MP-03", "PI-01"],
-                "agent_types": ["memory_poisoning", "prompt_injection"],
+                "agent_types": ["memory_poisoning", "prompt_injection_hunter"],
             },
             {
                 "id": "AA06",
@@ -828,7 +828,7 @@ def create_production_router() -> APIRouter:
                 "id": "AA07",
                 "name": "System Prompt Leakage",
                 "agents": ["ME-10", "PI-01"],
-                "agent_types": ["model_extraction", "prompt_injection"],
+                "agent_types": ["model_extraction", "prompt_injection_hunter"],
             },
             {
                 "id": "AA08",
@@ -918,8 +918,8 @@ def create_production_router() -> APIRouter:
                 "id": "BM-01",
                 "name": "Basic Prompt Injection",
                 "agent": "PI-01",
-                "agent_type": "prompt_injection",
-                "category": "prompt_injection",
+                "agent_type": "prompt_injection_hunter",
+                "category": "prompt_injection_hunter",
                 "description": "Tests detection of standard injection patterns",
             },
             {
@@ -958,8 +958,8 @@ def create_production_router() -> APIRouter:
                 "id": "BM-06",
                 "name": "Cross-Agent Data Relay",
                 "agent": "CX-06",
-                "agent_type": "cross_agent_exfil",
-                "category": "cross_agent_exfil",
+                "agent_type": "cross_agent_exfiltration",
+                "category": "cross_agent_exfiltration",
                 "description": "Tests data leakage between agent boundaries",
             },
             {
@@ -1064,13 +1064,13 @@ def create_production_router() -> APIRouter:
 
         patterns: list[dict[str, Any]] = []
         agent_code_map = {
-            "prompt_injection": "PI-01",
+            "prompt_injection_hunter": "PI-01",
             "tool_poisoning": "TP-02",
             "supply_chain": "SC-09",
             "memory_poisoning": "MP-03",
             "identity_spoof": "IS-04",
             "context_window": "CW-05",
-            "cross_agent_exfil": "CX-06",
+            "cross_agent_exfiltration": "CX-06",
             "privilege_escalation": "PE-07",
             "race_condition": "RC-08",
             "model_extraction": "ME-10",

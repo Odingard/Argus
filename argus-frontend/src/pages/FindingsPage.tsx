@@ -54,6 +54,8 @@ const SEVERITY_STYLES: Record<string, string> = {
 
 const STATUS_ICONS: Record<string, React.ElementType> = {
   open: AlertTriangle,
+  unvalidated: AlertTriangle,
+  validated: CheckCircle,
   triaged: Clock,
   resolved: CheckCircle,
   false_positive: XCircle,
@@ -176,6 +178,8 @@ export function FindingsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="unvalidated">Unvalidated</SelectItem>
+            <SelectItem value="validated">Validated</SelectItem>
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="triaged">Triaged</SelectItem>
             <SelectItem value="resolved">Resolved</SelectItem>
