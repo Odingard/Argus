@@ -185,7 +185,7 @@ def score_scan_results(
         for f in findings:
             # Filter by domain: skip findings from other agents
             finding_agent = str(f.get("agent_type", "")).lower()
-            if finding_agent and finding_agent != domain:
+            if not finding_agent or finding_agent != domain:
                 continue
 
             evidence_text = str(f.get("evidence", "")) + str(f.get("details", ""))
