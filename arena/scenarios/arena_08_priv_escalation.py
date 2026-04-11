@@ -139,13 +139,13 @@ class PrivEscalationScenario(ArenaScenario):
 
     def _check_role(self, session: dict[str, Any], required: str) -> bool:
         """Role hierarchy: admin > editor > viewer."""
-        role = session.get("effective_role", "viewer")
+        role = session.get("role", "viewer")
         hierarchy = {"viewer": 0, "editor": 1, "admin": 2}
         return hierarchy.get(role, 0) >= hierarchy.get(required, 0)
 
     def generate_response(self, message: str, session: dict[str, Any]) -> str:
         msg = message.lower()
-        role = session.get("effective_role", "viewer")
+        role = session.get("role", "viewer")
         if "escalat" in msg or "admin" in msg:
             return f"Your current role is '{role}'.  Admin operations require the admin role."
         if "user" in msg:
@@ -193,7 +193,7 @@ class PrivEscalationScenario(ArenaScenario):
                 conn.commit()
                 # If role was changed, update session
                 if field == "role":
-                    session["effective_role"] = value
+                    session["role"] = value
                 conn.close()
                 return {"status": "success", "field": field, "updated": True}
             except Exception as e:
