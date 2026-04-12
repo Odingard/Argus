@@ -106,6 +106,7 @@ class ToolPoisoningAgent(LLMAttackAgent):
             self._techniques_attempted += 1
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"scan-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -212,6 +213,7 @@ class ToolPoisoningAgent(LLMAttackAgent):
 
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"output-scan-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -725,6 +727,7 @@ class ToolPoisoningAgent(LLMAttackAgent):
         for mcp_url in self.config.target.mcp_server_urls:
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"shadow-scan-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -796,6 +799,7 @@ class ToolPoisoningAgent(LLMAttackAgent):
             # (enumerated at start vs. now)
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"trust-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
