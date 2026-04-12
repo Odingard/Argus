@@ -77,6 +77,10 @@ STATIC_DIR = Path(__file__).parent / "static"
 # this to "1" before starting the server.
 ALLOW_PRIVATE_RANGES = os.environ.get("ARGUS_WEB_ALLOW_PRIVATE", "").lower() in ("1", "true", "yes")
 
+# When True, inject the auth token into the HTML for ALL clients (not just
+# loopback).  Enable when running behind a trusted reverse proxy or tunnel.
+INJECT_TOKEN_ALL = os.environ.get("ARGUS_WEB_INJECT_TOKEN", "").lower() in ("1", "true", "yes")
+
 # Auth token. Sourced from env or auto-generated.
 _TOKEN_FROM_ENV = os.environ.get("ARGUS_WEB_TOKEN", "").strip()
 WEB_TOKEN: str = _TOKEN_FROM_ENV or secrets.token_urlsafe(32)
@@ -414,27 +418,31 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def index(request: Request) -> Response:
-        """Serve dashboard HTML with the auth token injected.
+        """Serve dashboard HTML, optionally injecting the auth token.
 
-        The token is only injected for requests from loopback (127.0.0.1 / ::1).
-        Browsers loading the page over loopback are trusted; cross-network
-        loads must supply the token via Authorization header manually.
+        By default the token is only injected for loopback clients
+        (127.0.0.1 / ::1).  Set ``ARGUS_WEB_INJECT_TOKEN=1`` to inject
+        the token for all clients — use this when the dashboard is behind
+        a trusted reverse proxy or tunnel.
         """
+        client_host = request.client.host if request.client else ""
+        is_loopback = client_host in ("127.0.0.1", "::1", "localhost")
+
         try:
             html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         except OSError:
             raise HTTPException(status_code=500, detail="Dashboard HTML missing") from None
 
-        # Always inject the token into a meta tag the JS will read.
-        # This allows the dashboard to work over tunnels / reverse proxies.
-        # HTML-escape the token: auto-generated tokens are safe, but an
-        # operator-supplied ARGUS_WEB_TOKEN containing quotes would
-        # otherwise break out of the attribute and enable stored XSS.
-        from html import escape as _html_escape
+        if is_loopback or INJECT_TOKEN_ALL:
+            # Inject the token into a meta tag the JS will read.
+            # HTML-escape the token: auto-generated tokens are safe, but an
+            # operator-supplied ARGUS_WEB_TOKEN containing quotes would
+            # otherwise break out of the attribute and enable stored XSS.
+            from html import escape as _html_escape
 
-        safe_token = _html_escape(WEB_TOKEN, quote=True)
-        token_meta = f'<meta name="argus-token" content="{safe_token}">'
-        html = html.replace("</head>", f"  {token_meta}\n</head>", 1)
+            safe_token = _html_escape(WEB_TOKEN, quote=True)
+            token_meta = f'<meta name="argus-token" content="{safe_token}">'
+            html = html.replace("</head>", f"  {token_meta}\n</head>", 1)
 
         return Response(content=html, media_type="text/html")
 
