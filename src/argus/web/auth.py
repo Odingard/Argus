@@ -75,16 +75,25 @@ async def authenticate(
 ) -> AuthContext:
     """Authenticate a request using bearer token or API key.
 
+    Accepts token via:
+      1. Authorization: Bearer <token>  (standard)
+      2. X-Argus-Token: <token>         (fallback for proxied environments)
+
     Tries database API key first, falls back to legacy token.
     """
-    if credentials is None or credentials.scheme.lower() != "bearer":
+    # Try X-Argus-Token header first (works through reverse proxies that
+    # override the Authorization header, e.g. basic-auth tunnels).
+    alt_token = request.headers.get("X-Argus-Token", "").strip()
+    if alt_token:
+        token = alt_token
+    elif credentials is not None and credentials.scheme.lower() == "bearer":
+        token = credentials.credentials
+    else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Bearer token required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    token = credentials.credentials
 
     # Try database API key first
     try:
