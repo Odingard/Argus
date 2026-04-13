@@ -84,7 +84,7 @@ class ReportRenderer:
 
         return "\n".join(lines)
 
-    def render_rich_summary(self, scan_result: ScanResult, console: Console) -> Panel:
+    def render_rich_summary(self, scan_result: ScanResult, console: Console) -> None:
         """Render a Rich-formatted summary with color-coded agents."""
         s = scan_result.summary()
 
@@ -131,6 +131,15 @@ class ReportRenderer:
                 dur,
             )
 
+        # Severity styles — shared by findings and compound paths tables
+        sev_styles = {
+            FindingSeverity.CRITICAL: "bold red reverse",
+            FindingSeverity.HIGH: "bold red",
+            FindingSeverity.MEDIUM: "bold yellow",
+            FindingSeverity.LOW: "cyan",
+            FindingSeverity.INFO: "dim",
+        }
+
         # Findings by severity
         findings_table = None
         validated = scan_result.validated_findings
@@ -140,13 +149,6 @@ class ReportRenderer:
             findings_table.add_column("Agent", width=22)
             findings_table.add_column("Title")
 
-            sev_styles = {
-                FindingSeverity.CRITICAL: "bold red reverse",
-                FindingSeverity.HIGH: "bold red",
-                FindingSeverity.MEDIUM: "bold yellow",
-                FindingSeverity.LOW: "cyan",
-                FindingSeverity.INFO: "dim",
-            }
             for f in sorted(validated, key=lambda x: list(FindingSeverity).index(x.severity)):
                 sev_style = sev_styles.get(f.severity, "white")
                 agent_color = agent_color_by_value(f.agent_type)
@@ -179,7 +181,7 @@ class ReportRenderer:
                 )
             console.print(paths_table)
 
-        return Text("")  # empty — we already printed everything
+        return None  # already printed everything above
 
     def _build_report(self, scan_result: ScanResult) -> dict[str, Any]:
         return {

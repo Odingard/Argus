@@ -337,7 +337,7 @@ def scan(
         console.print(f"[yellow]Warning: Could not persist scan: {type(exc).__name__}[/]")
 
     renderer = ReportRenderer()
-    console.print(renderer.render_rich_summary(result, console))
+    renderer.render_rich_summary(result, console)
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
