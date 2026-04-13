@@ -104,12 +104,19 @@ export function LiveScanPage() {
   const activitySeenRef = useRef<number>(0);
   const userScrolledUpRef = useRef(false);
   const isAutoScrollingRef = useRef(false);
+  const autoScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastScrollTopRef = useRef(0);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
   // Auto-scroll feed to bottom ONLY when user hasn't scrolled up
   useEffect(() => {
     if (!userScrolledUpRef.current && feedEndRef.current) {
       isAutoScrollingRef.current = true;
+      // Safety timeout: reset flag if smooth scroll doesn't reach bottom within 1s
+      if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
+      autoScrollTimerRef.current = setTimeout(() => {
+        isAutoScrollingRef.current = false;
+      }, 1000);
       feedEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [activityLog.length]);
@@ -117,12 +124,24 @@ export function LiveScanPage() {
   // Detect when user scrolls up in the feed
   const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    // If this scroll event is from programmatic auto-scroll, ignore it
+    const currentTop = el.scrollTop;
+    const atBottom = el.scrollHeight - currentTop - el.clientHeight < 40;
+    // If this scroll event is from programmatic auto-scroll, check for user interruption
     if (isAutoScrollingRef.current) {
-      if (atBottom) isAutoScrollingRef.current = false;
+      // User scrolled upward against the auto-scroll — treat as intentional
+      if (currentTop < lastScrollTopRef.current - 5) {
+        isAutoScrollingRef.current = false;
+        if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
+        userScrolledUpRef.current = true;
+        setShowJumpToLatest(true);
+      } else if (atBottom) {
+        isAutoScrollingRef.current = false;
+        if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
+      }
+      lastScrollTopRef.current = currentTop;
       return;
     }
+    lastScrollTopRef.current = currentTop;
     userScrolledUpRef.current = !atBottom;
     setShowJumpToLatest(!atBottom);
   }, []);
@@ -472,6 +491,10 @@ export function LiveScanPage() {
                     onClick={() => {
                       userScrolledUpRef.current = false;
                       isAutoScrollingRef.current = true;
+                      if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
+                      autoScrollTimerRef.current = setTimeout(() => {
+                        isAutoScrollingRef.current = false;
+                      }, 1000);
                       setShowJumpToLatest(false);
                       feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
                     }}
