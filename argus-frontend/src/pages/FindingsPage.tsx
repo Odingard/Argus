@@ -71,6 +71,27 @@ export function FindingsPage() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scanMap, setScanMap] = useState<Map<string, string>>(new Map());
+
+  // Fetch scan→target map once on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadScans() {
+      try {
+        const scansData = await getScans("limit=200");
+        if (cancelled) return;
+        const map = new Map<string, string>();
+        for (const s of scansData.scans || []) {
+          map.set(String(s.id ?? ""), String(s.target_name ?? s.target ?? ""));
+        }
+        setScanMap(map);
+      } catch {
+        // non-critical — findings still render with "Unknown" target
+      }
+    }
+    loadScans();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,15 +102,8 @@ export function FindingsPage() {
         if (severityFilter !== "all") params.set("severity", severityFilter);
         if (statusFilter !== "all") params.set("status", statusFilter);
         if (search) params.set("search", search);
-        const [data, scansData] = await Promise.all([
-          getFindings(params.toString() || undefined),
-          getScans(),
-        ]);
+        const data = await getFindings(params.toString() || undefined);
         if (cancelled) return;
-        const scanMap = new Map<string, string>();
-        for (const s of scansData.scans || []) {
-          scanMap.set(String(s.id ?? ""), String(s.target_name ?? s.target ?? ""));
-        }
         setFindings(
           (data.findings || []).map((f: Record<string, unknown>) => ({
             id: String(f.id ?? ""),
@@ -115,7 +129,7 @@ export function FindingsPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [severityFilter, statusFilter, search]);
+  }, [severityFilter, statusFilter, search, scanMap]);
 
   const handleStatusChange = async (findingId: string, newStatus: string) => {
     try {

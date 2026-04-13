@@ -103,7 +103,6 @@ _PROBE_PATHS: list[tuple[str, str, SurfaceClass, dict[str, Any] | None]] = [
     ("/infer", "POST", SurfaceClass.CHAT, {"prompt": "hello"}),
     ("/predict", "POST", SurfaceClass.CHAT, {"instances": [{"input": "hello"}]}),
     ("/api/generate", "POST", SurfaceClass.CHAT, {"model": "probe", "prompt": "hello"}),
-    ("/api/chat", "POST", SurfaceClass.CHAT, {"model": "probe", "messages": [{"role": "user", "content": "hello"}]}),
     # KServe / Seldon
     ("/v2/models/model/infer", "POST", SurfaceClass.CHAT, {"inputs": [{"name": "input", "data": ["hello"]}]}),
     ("/api/v1.0/predictions", "POST", SurfaceClass.CHAT, {"data": {"ndarray": ["hello"]}}),
