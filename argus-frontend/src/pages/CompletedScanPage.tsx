@@ -171,10 +171,10 @@ export function CompletedScanPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/scan/${scan.id}`)}>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); navigate(`/scan/${scan.id}`); }}>
                           <Eye className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => window.open(`/api/scans/${scan.id}/report?format=json`, "_blank")}>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); window.open(`/api/scans/${scan.id}/report?format=json`, "_blank"); }}>
                           <Download className="h-3 w-3" />
                         </Button>
                       </div>

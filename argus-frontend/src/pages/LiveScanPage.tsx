@@ -102,7 +102,7 @@ export function LiveScanPage() {
       if (targetToken.trim()) {
         scanBody.agent_api_key = targetToken.trim();
       }
-      console.log("[ARGUS] scan request:", JSON.stringify(scanBody));
+      console.log("[ARGUS] scan request: target=%s agents=%s", scanBody.target_name, scanBody.mcp_urls);
       const result = await apiStartScan(scanBody);
       const newScanId = result.scan_id ? String(result.scan_id) : null;
       setScanId(newScanId);

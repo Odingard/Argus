@@ -583,9 +583,14 @@ class SupplyChainAgent(LLMAttackAgent):
         results: list[tuple[str, str]] = []
         import httpx
 
+        headers: dict[str, str] = {}
+        if self.config.target.agent_api_key:
+            headers["Authorization"] = f"Bearer {self.config.target.agent_api_key}"
         for mcp_url in self.config.target.mcp_server_urls:
             try:
-                async with httpx.AsyncClient(timeout=10, event_hooks={"request": [], "response": []}) as client:
+                async with httpx.AsyncClient(
+                    timeout=10, headers=headers, event_hooks={"request": [], "response": []}
+                ) as client:
                     response = await client.post(
                         mcp_url,
                         json={
