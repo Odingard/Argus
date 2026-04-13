@@ -30,6 +30,7 @@ from argus.conductor import (
     ResponseMatcher,
     TurnResult,
     TurnSpec,
+    quick_eval,
 )
 from argus.models.agents import AgentType
 from argus.models.findings import (
@@ -312,6 +313,7 @@ class ModelExtractionAgent(LLMAttackAgent):
     ) -> dict[str, Any] | None:
         """Check response for evidence of model/config extraction."""
         text = result.response_text
+
         markers = ResponseMatcher.find_sensitive_markers(text)
         priv_indicators = ResponseMatcher.find_privilege_indicators(text)
 
@@ -369,6 +371,11 @@ class ModelExtractionAgent(LLMAttackAgent):
 
         # Require at least one indicator category to have matches
         if not markers and not priv_indicators and not extraction_indicators:
+            # Fallback: behavior-first evaluation engine catches patterns
+            # that technique-specific keywords miss (e.g. signature matches).
+            eval_evidence = quick_eval(text)
+            if eval_evidence is not None and eval_evidence.get("matched_signatures"):
+                return eval_evidence
             return None
 
         return {

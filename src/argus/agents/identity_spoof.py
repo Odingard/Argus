@@ -32,6 +32,7 @@ from argus.conductor import (
     ResponseMatcher,
     TurnResult,
     TurnSpec,
+    quick_eval,
 )
 from argus.models.agents import AgentType
 from argus.models.findings import (
@@ -209,6 +210,9 @@ class IdentitySpoofAgent(LLMAttackAgent):
         if not spoofed.ok():
             return None
 
+        # Layer 1: New behavior-first evaluation on spoofed response
+        eval_evidence = quick_eval(spoofed.response_text)
+
         spoofed_priv = ResponseMatcher.find_privilege_indicators(spoofed.response_text)
         spoofed_markers = ResponseMatcher.find_sensitive_markers(spoofed.response_text)
 
@@ -227,13 +231,16 @@ class IdentitySpoofAgent(LLMAttackAgent):
         if not new_priv and not new_markers and not status_change:
             return None
 
-        return {
+        result: dict[str, Any] = {
             "new_privilege_indicators": new_priv,
             "new_sensitive_markers": new_markers,
             "status_change": status_change,
             "baseline_status": baseline.status_code,
             "spoofed_status": spoofed.status_code,
         }
+        if eval_evidence is not None:
+            result["eval_evidence"] = eval_evidence
+        return result
 
     async def _report(
         self,
