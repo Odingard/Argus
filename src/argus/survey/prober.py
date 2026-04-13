@@ -275,9 +275,9 @@ _SURFACE_KEYWORDS: list[tuple[re.Pattern[str], SurfaceClass]] = [
     (re.compile(r"chat|message|conversation|ask|query|triage|review|assess", re.I), SurfaceClass.CHAT),
     (re.compile(r"memory|context|session|history|document|upload|knowledge|rag", re.I), SurfaceClass.MEMORY),
     (re.compile(r"agent|execute|orchestrat|task|internal", re.I), SurfaceClass.IDENTITY),
-    (re.compile(r"tool|function|plugin|action|skill", re.I), SurfaceClass.TOOLS),
+    (re.compile(r"\btool\b|\bfunction\b|\bplugin\b|\baction\b|\bskill\b", re.I), SurfaceClass.TOOLS),
     (re.compile(r"pay|transfer|transaction|charge|financial|initiate|confirm", re.I), SurfaceClass.PAYMENT),
-    (re.compile(r"audit|log|exfil|metric|stat|debug|spend", re.I), SurfaceClass.EXFILTRATION),
+    (re.compile(r"audit|\blogs?\b|exfil|metric|\bstats?\b|debug|spend", re.I), SurfaceClass.EXFILTRATION),
     (re.compile(r"admin|config|setting|internal|secret", re.I), SurfaceClass.ADMIN),
     (re.compile(r"health|ping|status|ready|live", re.I), SurfaceClass.HEALTH),
 ]
