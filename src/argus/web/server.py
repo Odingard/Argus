@@ -409,7 +409,7 @@ def create_app() -> FastAPI:
         allow_origins=allow_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Argus-Token"],
     )
 
     state = ScanState()
