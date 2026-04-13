@@ -181,6 +181,16 @@ export const getCorpusPatterns = (search?: string) =>
     total: number;
   }>(`/api/corpus/patterns${search ? `?search=${encodeURIComponent(search)}` : ""}`);
 
+// Activity log entry from backend signal bus
+export interface ActivityEntry {
+  agent: string;
+  ts: number;
+  seq?: number;
+  category: "status" | "probe" | "finding" | "technique" | "recon";
+  action: string;
+  detail: string;
+}
+
 // Live scan status (in-memory state from server.py, NOT DB historical data)
 export const getLiveScanStatus = () =>
   api.get<{
@@ -201,6 +211,7 @@ export const getLiveScanStatus = () =>
       current_action: string;
       techniques_attempted: number;
     }>;
+    activity_log: ActivityEntry[];
   }>("/api/status");
 
 // Health

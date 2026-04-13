@@ -88,24 +88,58 @@ class PromptInjectionHunter(LLMAttackAgent):
 
         # Load corpus patterns
         patterns = self._load_corpus_patterns()
-        logger.info("Loaded %d injection patterns from corpus", len(patterns))
+        await self.emit_activity(
+            f"Loaded {len(patterns)} injection patterns from corpus",
+            "Preparing direct, indirect, encoded, and multi-step payloads",
+            category="recon",
+        )
 
         # Phase 1: Direct injection attacks
+        await self.emit_activity(
+            "Phase 1: Direct injection attacks",
+            "Role hijacking, instruction override, guardrail bypass, delimiter escape",
+            category="technique",
+        )
         await self._attack_direct_injection(sandbox, patterns)
 
         # Phase 2: Indirect injection via tool descriptions/outputs
+        await self.emit_activity(
+            "Phase 2: Indirect injection via tool descriptions",
+            "Testing document injection, web content injection, tool description poisoning",
+            category="technique",
+        )
         await self._attack_indirect_injection(sandbox, patterns)
 
         # Phase 3: Encoded injection variants
+        await self.emit_activity(
+            "Phase 3: Encoded injection variants",
+            "Base64, ROT13, leetspeak, unicode homoglyph, reverse encoding",
+            category="technique",
+        )
         await self._attack_encoded_injection(sandbox, patterns)
 
         # Phase 4: LLM-generated novel variants
+        await self.emit_activity(
+            "Phase 4: LLM-generated novel variants",
+            "Using AI reasoning to generate novel injection payloads",
+            category="technique",
+        )
         await self._attack_llm_generated(sandbox)
 
         # Phase 5: Multi-step injection chains
+        await self.emit_activity(
+            "Phase 5: Multi-step injection chains",
+            "Trust establishment then exploit, split injection, conditional triggers",
+            category="technique",
+        )
         await self._attack_multistep_injection(sandbox)
 
         # Phase 6: Recursive prompt injection chains
+        await self.emit_activity(
+            "Phase 6: Recursive prompt injection",
+            "Self-replicating injection chains, output-as-input loops",
+            category="technique",
+        )
         await self._attack_recursive_injection(sandbox)
 
         logger.info(
@@ -820,6 +854,11 @@ class PromptInjectionHunter(LLMAttackAgent):
         """
         self._requests_made += 1
         await sandbox.record_request("POST", surface)
+        await self.emit_activity(
+            f"Firing: {technique}",
+            payload[:120],
+            category="probe",
+        )
 
         target = self.config.target
 

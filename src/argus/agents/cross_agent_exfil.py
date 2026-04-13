@@ -145,8 +145,19 @@ class CrossAgentExfilAgent(LLMAttackAgent):
             if mcp_base and mcp_base not in bases:
                 bases.append(mcp_base)
 
+        await self.emit_activity(
+            "Mapping multi-agent topology",
+            f"Discovering relay paths across {len(bases)} base URL(s)",
+            category="recon",
+        )
+
         for base in bases:
             try:
+                await self.emit_activity(
+                    f"Testing exfiltration channels: {base[:60]}",
+                    "Agent relay, shared resources, trust chain exploitation",
+                    category="technique",
+                )
                 await self._attack_base(sandbox, base)
             except Exception as exc:
                 logger.debug("CrossAgentExfil failed for base %s: %s", base, type(exc).__name__)

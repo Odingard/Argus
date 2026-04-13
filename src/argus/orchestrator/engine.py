@@ -102,6 +102,34 @@ class BaseAttackAgent:
         )
         self._signals_emitted += 1
 
+    async def emit_activity(
+        self,
+        action: str,
+        detail: str = "",
+        *,
+        category: str = "technique",
+    ) -> None:
+        """Broadcast a granular activity event for the live activity feed.
+
+        Args:
+            action: Short human-readable action label, e.g. "Sending prompt injection payload".
+            detail: Optional longer detail, e.g. the first 120 chars of the payload.
+            category: One of "technique", "probe", "response", "finding", "recon".
+        """
+        await self.signal_bus.emit(
+            Signal(
+                signal_type=SignalType.AGENT_ACTIVITY,
+                source_agent=self.agent_type.value,
+                source_instance=self.config.instance_id,
+                data={
+                    "action": action,
+                    "detail": detail[:200] if detail else "",
+                    "category": category,
+                },
+            )
+        )
+        self._signals_emitted += 1
+
     def build_result(self, status: AgentStatus, started_at: datetime, errors: list[str] | None = None) -> AgentResult:
         now = datetime.now(UTC)
         return AgentResult(

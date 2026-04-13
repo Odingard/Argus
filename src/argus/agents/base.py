@@ -214,9 +214,20 @@ class LLMAttackAgent(BaseAttackAgent):
             non_destructive=self.config.target.non_destructive,
         )
 
+        await self.emit_activity(
+            "Initializing sandbox environment",
+            f"Rate limit: {self.config.target.max_requests_per_minute} req/min",
+            category="recon",
+        )
+
         async with SandboxEnvironment(self.config.instance_id, sandbox_config) as sandbox:
             self._sandbox = sandbox
             try:
+                await self.emit_activity(
+                    "Loading attack corpus",
+                    f"Agent {self.agent_type.value} preparing attack techniques",
+                    category="recon",
+                )
                 await self.execute_attack(sandbox)
             except Exception as exc:
                 # Sanitize exception — may contain target secrets or sensitive paths

@@ -29,6 +29,7 @@ class SignalType(str, Enum):
     PARTIAL_FINDING = "partial_finding"
     TECHNIQUE_RESULT = "technique_result"
     AGENT_STATUS = "agent_status"
+    AGENT_ACTIVITY = "agent_activity"
     CORRELATION_REQUEST = "correlation_request"
 
 
