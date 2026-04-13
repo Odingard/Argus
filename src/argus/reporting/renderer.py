@@ -11,9 +11,16 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
 from argus import __version__
+from argus.models.agents import AgentStatus
 from argus.models.findings import Finding, FindingSeverity
 from argus.orchestrator.engine import ScanResult
+from argus.ui.colors import agent_color_by_value
 
 
 class ReportRenderer:
@@ -76,6 +83,103 @@ class ReportRenderer:
         lines.append("=" * 70)
 
         return "\n".join(lines)
+
+    def render_rich_summary(self, scan_result: ScanResult, console: Console) -> Panel:
+        """Render a Rich-formatted summary with color-coded agents."""
+        s = scan_result.summary()
+
+        # Header
+        header = Text()
+        header.append("ARGUS SCAN COMPLETE\n", style="bold red")
+        header.append(f"Scan ID: {scan_result.scan_id[:8]}  ", style="dim")
+        if s["duration_seconds"]:
+            header.append(f"Duration: {s['duration_seconds']:.1f}s  ", style="bold white")
+        header.append(f"Findings: {s['total_findings']}  ", style="bold yellow")
+        header.append(f"Validated: {s['validated_findings']}  ", style="bold green")
+        header.append(f"Compound Paths: {s['compound_attack_paths']}", style="bold magenta")
+
+        # Agent results table
+        agent_table = Table(title="Agent Results", expand=True, border_style="red")
+        agent_table.add_column("Agent", style="bold")
+        agent_table.add_column("Status", justify="center")
+        agent_table.add_column("Findings", justify="right")
+        agent_table.add_column("Validated", justify="right")
+        agent_table.add_column("Techniques", justify="right")
+        agent_table.add_column("Duration", justify="right")
+
+        for ar in scan_result.agent_results:
+            color = agent_color_by_value(ar.agent_type.value)
+            status_style = {
+                AgentStatus.COMPLETED: "green",
+                AgentStatus.FAILED: "red",
+                AgentStatus.TIMED_OUT: "yellow",
+                AgentStatus.SKIPPED: "dim",
+            }.get(ar.status, "white")
+            status_icon = {
+                AgentStatus.COMPLETED: "\u2713",
+                AgentStatus.FAILED: "\u2717",
+                AgentStatus.TIMED_OUT: "\u2298",
+                AgentStatus.SKIPPED: "\u2014",
+            }.get(ar.status, "?")
+            dur = f"{ar.duration_seconds:.1f}s" if ar.duration_seconds else "-"
+            agent_table.add_row(
+                Text(ar.agent_type.value, style=f"bold {color}"),
+                Text(f"{status_icon} {ar.status.value}", style=status_style),
+                Text(str(ar.findings_count), style="yellow" if ar.findings_count else "dim"),
+                Text(str(ar.validated_count), style="green" if ar.validated_count else "dim"),
+                f"{ar.techniques_succeeded}/{ar.techniques_attempted}",
+                dur,
+            )
+
+        # Findings by severity
+        findings_table = None
+        validated = scan_result.validated_findings
+        if validated:
+            findings_table = Table(title="Validated Findings", expand=True, border_style="yellow")
+            findings_table.add_column("Severity", justify="center", width=10)
+            findings_table.add_column("Agent", width=22)
+            findings_table.add_column("Title")
+
+            sev_styles = {
+                FindingSeverity.CRITICAL: "bold red reverse",
+                FindingSeverity.HIGH: "bold red",
+                FindingSeverity.MEDIUM: "bold yellow",
+                FindingSeverity.LOW: "cyan",
+                FindingSeverity.INFO: "dim",
+            }
+            for f in sorted(validated, key=lambda x: list(FindingSeverity).index(x.severity)):
+                sev_style = sev_styles.get(f.severity, "white")
+                agent_color = agent_color_by_value(f.agent_type)
+                findings_table.add_row(
+                    Text(f.severity.value.upper(), style=sev_style),
+                    Text(f.agent_type, style=f"bold {agent_color}"),
+                    f.title,
+                )
+
+        # Assemble output
+        console.print(Panel(header, border_style="red", title="[bold red]ARGUS[/]"))
+        console.print(agent_table)
+        if findings_table:
+            console.print(findings_table)
+
+        # Compound paths
+        if scan_result.compound_paths:
+            paths_table = Table(title="Compound Attack Paths", expand=True, border_style="magenta")
+            paths_table.add_column("Severity", justify="center", width=10)
+            paths_table.add_column("Title")
+            paths_table.add_column("Steps", justify="right")
+            paths_table.add_column("Exploitability", justify="right")
+            for path in scan_result.compound_paths:
+                sev_style = sev_styles.get(path.severity, "white")
+                paths_table.add_row(
+                    Text(path.severity.value.upper(), style=sev_style),
+                    path.title,
+                    str(len(path.attack_path_steps)),
+                    f"{path.exploitability_score}/10",
+                )
+            console.print(paths_table)
+
+        return Text("")  # empty — we already printed everything
 
     def _build_report(self, scan_result: ScanResult) -> dict[str, Any]:
         return {
