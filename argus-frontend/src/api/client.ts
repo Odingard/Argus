@@ -1,10 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8765";
+const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem("argus_token");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { "X-Argus-Token": token } : {}),
   };
   const res = await fetch(`${API_URL}${path}`, { ...options, headers: { ...headers, ...options?.headers } });
   if (res.status === 401) {
@@ -34,7 +34,7 @@ export const api = {
 export const login = (token: string) =>
   request<{ status: string; role: string; key_name: string }>("/api/auth/login", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { "X-Argus-Token": token },
   });
 
 // Dashboard

@@ -238,12 +238,29 @@ class ScanRequest(BaseModel):
 
 
 async def require_token(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> None:
     """Bearer token authentication for /api/* routes.
 
+    Accepts token via:
+      1. Authorization: Bearer <token>  (standard)
+      2. X-Argus-Token: <token>         (fallback for proxied environments)
+
     Uses constant-time compare to prevent timing attacks.
     """
+    # Try X-Argus-Token header first (works through reverse proxies that
+    # override the Authorization header, e.g. basic-auth tunnels).
+    alt_token = request.headers.get("X-Argus-Token", "").strip()
+    if alt_token:
+        if secrets.compare_digest(alt_token, WEB_TOKEN):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -392,7 +409,7 @@ def create_app() -> FastAPI:
         allow_origins=allow_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Argus-Token"],
     )
 
     state = ScanState()
@@ -739,12 +756,13 @@ def create_app() -> FastAPI:
         (EventSource cannot send custom headers in browsers).
         """
         # Validate token from header or query param
+        alt_token = request.headers.get("X-Argus-Token", "").strip()
         auth_header = request.headers.get("authorization", "")
         token_from_header = ""
         if auth_header.lower().startswith("bearer "):
             token_from_header = auth_header[7:].strip()
         token_from_query = request.query_params.get("token", "")
-        provided = token_from_header or token_from_query
+        provided = alt_token or token_from_header or token_from_query
         if not provided or not secrets.compare_digest(provided, WEB_TOKEN):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
