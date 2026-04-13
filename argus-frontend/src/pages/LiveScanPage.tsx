@@ -103,11 +103,13 @@ export function LiveScanPage() {
   const feedContainerRef = useRef<HTMLDivElement>(null);
   const activitySeenRef = useRef<number>(0);
   const userScrolledUpRef = useRef(false);
+  const isAutoScrollingRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
   // Auto-scroll feed to bottom ONLY when user hasn't scrolled up
   useEffect(() => {
     if (!userScrolledUpRef.current && feedEndRef.current) {
+      isAutoScrollingRef.current = true;
       feedEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [activityLog.length]);
@@ -116,6 +118,11 @@ export function LiveScanPage() {
   const handleFeedScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    // If this scroll event is from programmatic auto-scroll, ignore it
+    if (isAutoScrollingRef.current) {
+      if (atBottom) isAutoScrollingRef.current = false;
+      return;
+    }
     userScrolledUpRef.current = !atBottom;
     setShowJumpToLatest(!atBottom);
   }, []);
@@ -464,6 +471,7 @@ export function LiveScanPage() {
                     className="text-[10px] font-mono text-yellow-400 hover:text-yellow-300"
                     onClick={() => {
                       userScrolledUpRef.current = false;
+                      isAutoScrollingRef.current = true;
                       setShowJumpToLatest(false);
                       feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
                     }}
