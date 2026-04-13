@@ -405,7 +405,7 @@ def create_mock_app() -> FastAPI:
     app = FastAPI(
         title="ARGUS Test Target — Mock Vulnerable AI Agent",
         description="Intentionally vulnerable AI agent for ARGUS testing. DO NOT EXPOSE TO INTERNET.",
-        version="0.1.0",
+        version="0.1.1",
     )
 
     memory = MemoryStore()

@@ -357,7 +357,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="ARGUS Web Dashboard",
         description="Autonomous AI Red Team Platform — live web dashboard",
-        version="0.1.0",
+        version="0.1.1",
     )
 
     # Same-origin only by default — explicitly tighten CORS.
