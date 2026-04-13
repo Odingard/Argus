@@ -88,6 +88,7 @@ class SupplyChainAgent(LLMAttackAgent):
 
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"trust-analysis-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -179,6 +180,7 @@ class SupplyChainAgent(LLMAttackAgent):
 
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"integrity-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -280,6 +282,7 @@ class SupplyChainAgent(LLMAttackAgent):
         for mcp_url in self.config.target.mcp_server_urls:
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"depconfusion-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -380,6 +383,7 @@ class SupplyChainAgent(LLMAttackAgent):
 
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"blind-trust-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -506,6 +510,7 @@ class SupplyChainAgent(LLMAttackAgent):
         for mcp_url in self.config.target.mcp_server_urls:
             try:
                 config = MCPServerConfig(
+                    api_key=self.config.target.agent_api_key,
                     name=f"typosquat-{mcp_url}",
                     transport="streamable-http",
                     url=mcp_url,
@@ -580,7 +585,12 @@ class SupplyChainAgent(LLMAttackAgent):
 
         for mcp_url in self.config.target.mcp_server_urls:
             try:
-                async with httpx.AsyncClient(timeout=10, event_hooks={"request": [], "response": []}) as client:
+                headers: dict[str, str] = {}
+                if self.config.target.agent_api_key and mcp_url.startswith("https://"):
+                    headers["Authorization"] = f"Bearer {self.config.target.agent_api_key}"
+                async with httpx.AsyncClient(
+                    timeout=10, headers=headers, event_hooks={"request": [], "response": []}
+                ) as client:
                     response = await client.post(
                         mcp_url,
                         json={

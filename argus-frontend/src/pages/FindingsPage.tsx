@@ -29,10 +29,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getFindings, updateFindingStatus } from "@/api/client";
+import { getFindings, updateFindingStatus, getScans } from "@/api/client";
 
 interface Finding {
   id: string;
+  scanId: string;
+  scanTarget: string;
   title: string;
   severity: string;
   agent: string;
@@ -69,6 +71,27 @@ export function FindingsPage() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scanMap, setScanMap] = useState<Map<string, string>>(new Map());
+
+  // Fetch scan→target map once on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadScans() {
+      try {
+        const scansData = await getScans("limit=200");
+        if (cancelled) return;
+        const map = new Map<string, string>();
+        for (const s of scansData.scans || []) {
+          map.set(String(s.id ?? ""), String(s.target_name ?? s.target ?? ""));
+        }
+        setScanMap(map);
+      } catch {
+        // non-critical — findings still render with "Unknown" target
+      }
+    }
+    loadScans();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +107,8 @@ export function FindingsPage() {
         setFindings(
           (data.findings || []).map((f: Record<string, unknown>) => ({
             id: String(f.id ?? ""),
+            scanId: String(f.scan_id ?? ""),
+            scanTarget: scanMap.get(String(f.scan_id ?? "")) || "Unknown",
             title: String(f.title ?? ""),
             severity: String(f.severity ?? "medium"),
             agent: String(f.agent_type ?? ""),
@@ -104,7 +129,7 @@ export function FindingsPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [severityFilter, statusFilter, search]);
+  }, [severityFilter, statusFilter, search, scanMap]);
 
   const handleStatusChange = async (findingId: string, newStatus: string) => {
     try {
@@ -195,12 +220,11 @@ export function FindingsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8"></TableHead>
-                <TableHead>ID</TableHead>
                 <TableHead>Finding</TableHead>
                 <TableHead>Severity</TableHead>
+                <TableHead>Scan Target</TableHead>
                 <TableHead>Agent</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Confidence</TableHead>
+                <TableHead>Surface</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -220,7 +244,6 @@ export function FindingsPage() {
                           <ChevronRight className="h-3 w-3" />
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{f.id}</TableCell>
                       <TableCell className="max-w-xs truncate text-sm font-medium">
                         {f.title}
                       </TableCell>
@@ -229,13 +252,9 @@ export function FindingsPage() {
                           {f.severity}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{f.agent}</TableCell>
-                      <TableCell className="text-sm">{f.target}</TableCell>
-                      <TableCell>
-                        <span className="text-sm font-medium">
-                          {(f.verdictWeight * 100).toFixed(0)}%
-                        </span>
-                      </TableCell>
+                      <TableCell className="text-xs">{f.scanTarget}</TableCell>
+                      <TableCell className="font-mono text-xs">{f.agent.replace(/_/g, " ")}</TableCell>
+                      <TableCell className="font-mono text-xs">{f.target}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="gap-1 text-xs capitalize">
                           <StatusIcon className="h-3 w-3" />
@@ -245,7 +264,7 @@ export function FindingsPage() {
                     </TableRow>
                     {expanded === f.id && (
                       <TableRow key={`${f.id}-detail`}>
-                        <TableCell colSpan={8}>
+                        <TableCell colSpan={7}>
                           <div className="space-y-3 rounded-md bg-background p-4">
                             <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
