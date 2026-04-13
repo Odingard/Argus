@@ -18,6 +18,8 @@ from typing import Any
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
+from argus import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -405,7 +407,7 @@ def create_mock_app() -> FastAPI:
     app = FastAPI(
         title="ARGUS Test Target — Mock Vulnerable AI Agent",
         description="Intentionally vulnerable AI agent for ARGUS testing. DO NOT EXPOSE TO INTERNET.",
-        version="0.1.1",
+        version=__version__,
     )
 
     memory = MemoryStore()
@@ -417,7 +419,7 @@ def create_mock_app() -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok", "service": "argus-mock-target", "version": "0.1.0"}
+        return {"status": "ok", "service": "argus-mock-target", "version": __version__}
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -655,14 +657,14 @@ def create_mock_app() -> FastAPI:
         return {
             "status": "admin_panel",
             "users": 3,
-            "config": {"model": "mock-vulnerable-agent-v1", "version": "0.1.0"},
+            "config": {"model": "mock-vulnerable-agent-v1", "version": __version__},
         }
 
     @app.get("/config")
     async def config() -> dict[str, Any]:
         return {
             "model": "mock-vulnerable-agent-v1",
-            "version": "0.1.0",
+            "version": __version__,
             "features": ["chat", "memory", "tools", "execute"],
         }
 

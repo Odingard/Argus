@@ -119,7 +119,7 @@ class LLMAttackAgent(BaseAttackAgent):
             self._bases_attempted += 1
             return False
         logger.warning(
-            "%s: target %s rejected %d/%d probes with 401/403 — skipping " "(set agent_api_key to authenticate)",
+            "%s: target %s rejected %d/%d probes with 401/403 — skipping (set agent_api_key to authenticate)",
             self.agent_type.value,
             survey.target_base_url,
             survey.auth_failure_count,
