@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Radio,
@@ -10,6 +10,13 @@ import {
   Clock,
   Loader2,
   Eye,
+  Terminal,
+  Shield,
+  Zap,
+  Search,
+  Bug,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -25,16 +33,56 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { startScan as apiStartScan, cancelScan, getAgentStatus, getLiveScanStatus } from "@/api/client";
+import type { ActivityEntry } from "@/api/client";
 
 interface AgentStatus {
   code: string;
   name: string;
+  type: string;
   status: "idle" | "running" | "completed" | "error";
   progress: number;
   findings: number;
   techniques: number;
   currentTechnique?: string;
 }
+
+const CATEGORY_STYLES: Record<string, { color: string; icon: typeof Terminal; label: string }> = {
+  status: { color: "text-blue-400", icon: Shield, label: "STATUS" },
+  probe: { color: "text-cyan-400", icon: Search, label: "PROBE" },
+  finding: { color: "text-red-400", icon: Bug, label: "FINDING" },
+  technique: { color: "text-yellow-400", icon: Zap, label: "TECHNIQUE" },
+  recon: { color: "text-purple-400", icon: Eye, label: "RECON" },
+};
+
+const AGENT_LABELS: Record<string, string> = {
+  prompt_injection_hunter: "Prompt Injection",
+  tool_poisoning: "Tool Poisoning",
+  memory_poisoning: "Memory Poisoning",
+  identity_spoof: "Identity Spoof",
+  context_window: "Context Window",
+  cross_agent_exfiltration: "Cross-Agent Exfil",
+  privilege_escalation: "Privilege Escalation",
+  race_condition: "Race Condition",
+  supply_chain: "Supply Chain",
+  model_extraction: "Model Extraction",
+  persona_hijacking: "Persona Hijacking",
+  memory_boundary_collapse: "Memory Boundary",
+};
+
+const AGENT_CODE_MAP: Record<string, string> = {
+  prompt_injection_hunter: "PI-01",
+  tool_poisoning: "TP-02",
+  memory_poisoning: "MP-03",
+  identity_spoof: "IS-04",
+  context_window: "CW-05",
+  cross_agent_exfiltration: "CX-06",
+  privilege_escalation: "PE-07",
+  race_condition: "RC-08",
+  supply_chain: "SC-09",
+  model_extraction: "ME-10",
+  persona_hijacking: "PH-11",
+  memory_boundary_collapse: "MB-12",
+};
 
 export function LiveScanPage() {
   const navigate = useNavigate();
@@ -46,9 +94,21 @@ export function LiveScanPage() {
   const [scanMode, setScanMode] = useState("full");
   const [targetToken, setTargetToken] = useState("");
   const [scanError, setScanError] = useState<string | null>(null);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
+  const [activeView, setActiveView] = useState<"agents" | "feed">("feed");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const feedEndRef = useRef<HTMLDivElement>(null);
+  const activitySeenRef = useRef<number>(0);
 
-  // Load agent list from API on mount
+  // Auto-scroll feed to bottom on new entries
+  useEffect(() => {
+    if (feedEndRef.current) {
+      feedEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [activityLog.length]);
+
   useEffect(() => {
     async function loadAgents() {
       try {
@@ -57,6 +117,7 @@ export function LiveScanPage() {
           data.agents.map((a) => ({
             code: a.code,
             name: a.name,
+            type: a.type,
             status: "idle" as const,
             progress: 0,
             findings: a.findings ?? 0,
@@ -64,11 +125,11 @@ export function LiveScanPage() {
           }))
         );
       } catch {
-        // Fallback: populate from known agent list
         setAgents(
-          ["PI-01", "TP-02", "MP-03", "IS-04", "CW-05", "CX-06", "PE-07", "RC-08", "SC-09", "ME-10", "PH-11", "MB-12"].map((code) => ({
+          Object.entries(AGENT_CODE_MAP).map(([type, code]) => ({
             code,
-            name: code,
+            name: AGENT_LABELS[type] || type,
+            type,
             status: "idle" as const,
             progress: 0,
             findings: 0,
@@ -80,11 +141,19 @@ export function LiveScanPage() {
     loadAgents();
   }, []);
 
-  // Cleanup interval on unmount
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  }, []);
+
+  const toggleAgent = useCallback((agentType: string) => {
+    setExpandedAgents((prev) => {
+      const next = new Set(prev);
+      if (next.has(agentType)) next.delete(agentType);
+      else next.add(agentType);
+      return next;
+    });
   }, []);
 
   const handleStartScan = async () => {
@@ -92,6 +161,9 @@ export function LiveScanPage() {
     setScanError(null);
     setScanComplete(false);
     setScanId(null);
+    setActivityLog([]);
+    activitySeenRef.current = 0;
+    setElapsedSeconds(0);
     try {
       const scanBody: Record<string, unknown> = {
         target_name: targetUrl,
@@ -102,52 +174,61 @@ export function LiveScanPage() {
       if (targetToken.trim()) {
         scanBody.agent_api_key = targetToken.trim();
       }
-      console.log("[ARGUS] scan request: target=%s agents=%s", scanBody.target_name, scanBody.mcp_urls);
       const result = await apiStartScan(scanBody);
       const newScanId = result.scan_id ? String(result.scan_id) : null;
       setScanId(newScanId);
       setScanRunning(true);
-      // Poll the in-memory live scan status (NOT the DB-backed /agents/status)
+      setActiveView("feed");
       let step = 0;
       intervalRef.current = setInterval(async () => {
         step++;
         try {
           const data = await getLiveScanStatus();
-          // Map in-memory agent state to our AgentStatus interface
+          setElapsedSeconds(Math.round(data.elapsed_seconds || 0));
+
+          const serverLog = data.activity_log || [];
+          if (serverLog.length > activitySeenRef.current) {
+            const newEntries = serverLog.slice(activitySeenRef.current);
+            activitySeenRef.current = serverLog.length;
+            setActivityLog((prev) => [...prev, ...newEntries]);
+          }
+
           const agentEntries = Object.values(data.agents || {});
           if (agentEntries.length > 0) {
             setAgents((prev) => {
-              // Build a lookup from type to previous agent metadata
-              const prevByType = new Map(prev.map((a) => [a.code, a]));
-              // The in-memory state uses agent_type as keys; map back to codes
-              const codeMap: Record<string, string> = {
-                prompt_injection_hunter: "PI-01", tool_poisoning: "TP-02",
-                memory_poisoning: "MP-03", identity_spoof: "IS-04",
-                context_window: "CW-05", cross_agent_exfiltration: "CX-06",
-                privilege_escalation: "PE-07", race_condition: "RC-08",
-                supply_chain: "SC-09", model_extraction: "ME-10",
-                persona_hijacking: "PH-11", memory_boundary_collapse: "MB-12",
-              };
+              const prevByCode = new Map(prev.map((a) => [a.code, a]));
               return agentEntries.map((a) => {
-                const code = codeMap[a.type] || a.type;
-                const prevAgent = prevByType.get(code);
+                const code = AGENT_CODE_MAP[a.type] || a.type;
+                const prevAgent = prevByCode.get(code);
                 let status: AgentStatus["status"] = "idle";
                 if (a.status === "running") status = "running";
                 else if (a.status === "completed") status = "completed";
                 else if (a.status === "pending") status = "idle";
                 return {
                   code,
-                  name: prevAgent?.name || code,
+                  name: AGENT_LABELS[a.type] || prevAgent?.name || code,
+                  type: a.type,
                   status,
                   progress: a.status === "completed" ? 100 : a.status === "running" ? Math.min(step * 8, 95) : 0,
                   findings: a.findings_count ?? 0,
-                  techniques: prevAgent?.techniques ?? 5,
+                  techniques: a.techniques_attempted ?? prevAgent?.techniques ?? 5,
                   currentTechnique: a.status === "running" ? a.current_action : undefined,
                 };
               });
             });
+
+            for (const a of agentEntries) {
+              if (a.status === "running") {
+                setExpandedAgents((prev) => {
+                  if (prev.has(a.type)) return prev;
+                  const next = new Set(prev);
+                  next.add(a.type);
+                  return next;
+                });
+              }
+            }
           }
-          // Stop polling when scan is done
+
           if (data.status === "completed" || data.status === "failed" || data.status === "cancelled") {
             if (intervalRef.current) clearInterval(intervalRef.current);
             intervalRef.current = null;
@@ -190,9 +271,22 @@ export function LiveScanPage() {
   const totalFindings = agents.reduce((sum, a) => sum + a.findings, 0);
   const completed = agents.filter((a) => a.status === "completed").length;
   const running = agents.filter((a) => a.status === "running").length;
+  const total = agents.length || 12;
+
+  const activityByAgent: Record<string, ActivityEntry[]> = {};
+  for (const entry of activityLog) {
+    if (!activityByAgent[entry.agent]) activityByAgent[entry.agent] = [];
+    activityByAgent[entry.agent].push(entry);
+  }
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Live Scan</h2>
@@ -290,18 +384,115 @@ export function LiveScanPage() {
         </div>
       )}
 
-      {/* Stats bar */}
-      {scanRunning && (
+      {(scanRunning || scanComplete) && (
         <div className="grid grid-cols-4 gap-4">
           <MiniStat label="Agents Running" value={String(running)} icon={<Loader2 className="h-4 w-4 animate-spin text-blue-400" />} />
-          <MiniStat label="Completed" value={`${completed}/12`} icon={<CheckCircle className="h-4 w-4 text-green-400" />} />
+          <MiniStat label="Completed" value={`${completed}/${total}`} icon={<CheckCircle className="h-4 w-4 text-green-400" />} />
           <MiniStat label="Findings" value={String(totalFindings)} icon={<AlertTriangle className="h-4 w-4 text-yellow-400" />} />
-          <MiniStat label="Elapsed" value="—" icon={<Clock className="h-4 w-4 text-muted-foreground" />} />
+          <MiniStat label="Elapsed" value={formatTime(elapsedSeconds)} icon={<Clock className="h-4 w-4 text-muted-foreground" />} />
         </div>
       )}
 
-      {/* Agent grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {(scanRunning || scanComplete || activityLog.length > 0) && (
+        <div className="flex gap-1 border-b border-border pb-0">
+          <button
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeView === "feed" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setActiveView("feed")}
+          >
+            <Terminal className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+            Agent Activity
+          </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeView === "agents" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setActiveView("agents")}
+          >
+            <Shield className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+            Agent Grid
+          </button>
+        </div>
+      )}
+
+      {activeView === "feed" && (scanRunning || scanComplete || activityLog.length > 0) && (
+        <Card className="overflow-hidden border-primary/20">
+          <CardHeader className="pb-2 bg-black/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-green-400" />
+                <CardTitle className="text-sm font-mono text-green-400">
+                  ARGUS &mdash; Live Agent Activity
+                </CardTitle>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs text-muted-foreground">
+                {activityLog.length} events
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ScrollArea className="h-[420px] bg-black/40">
+              <div className="p-3 font-mono text-xs space-y-0.5">
+                {activityLog.length === 0 && scanRunning && (
+                  <div className="text-muted-foreground animate-pulse py-8 text-center">
+                    Waiting for agent activity...
+                  </div>
+                )}
+                {activityLog.map((entry, i) => (
+                  <ActivityLine key={i} entry={entry} />
+                ))}
+                <div ref={feedEndRef} />
+              </div>
+            </ScrollArea>
+
+            <div className="border-t border-border/50 bg-black/20 px-3 py-2">
+              <div className="flex flex-wrap gap-2">
+                {agents
+                  .filter((a) => a.status !== "idle")
+                  .map((agent) => {
+                    const agentEvents = activityByAgent[agent.type] || [];
+                    const findingCount = agentEvents.filter((e) => e.category === "finding").length;
+                    return (
+                      <button
+                        key={agent.code}
+                        onClick={() => toggleAgent(agent.type)}
+                        className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors ${expandedAgents.has(agent.type) ? "bg-primary/20 text-primary" : "bg-muted/30 text-muted-foreground hover:bg-muted/50"}`}
+                      >
+                        <StatusDot status={agent.status} />
+                        <span className="font-mono font-bold">{agent.code}</span>
+                        {findingCount > 0 && (
+                          <span className="text-red-400 font-bold">{findingCount}</span>
+                        )}
+                        {expandedAgents.has(agent.type) ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+
+              {Array.from(expandedAgents).map((agentType) => {
+                const agentEvents = activityByAgent[agentType] || [];
+                if (agentEvents.length === 0) return null;
+                return (
+                  <div key={agentType} className="mt-2 rounded border border-border/50 bg-black/30 p-2">
+                    <div className="text-xs font-mono text-primary mb-1">
+                      {AGENT_LABELS[agentType] || agentType} &mdash; {agentEvents.length} events
+                    </div>
+                    <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                      {agentEvents.slice(-15).map((entry, i) => (
+                        <ActivityLine key={i} entry={entry} compact />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {(activeView === "agents" || (!scanRunning && !scanComplete && activityLog.length === 0)) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {agents.map((agent) => (
           <Card key={agent.code} className="overflow-hidden">
             <CardContent className="p-4">
@@ -326,7 +517,7 @@ export function LiveScanPage() {
               {agent.status === "completed" && (
                 <div className="mt-3 flex items-center gap-1 text-xs text-green-400">
                   <CheckCircle className="h-3 w-3" />
-                  Complete — {agent.techniques} techniques tested
+                  Complete &mdash; {agent.techniques} techniques tested
                 </div>
               )}
               {agent.status === "idle" && (
@@ -338,6 +529,32 @@ export function LiveScanPage() {
           </Card>
         ))}
       </div>
+      )}
+    </div>
+  );
+}
+
+function ActivityLine({ entry, compact }: { entry: ActivityEntry; compact?: boolean }) {
+  const style = CATEGORY_STYLES[entry.category] || CATEGORY_STYLES.status;
+  const Icon = style.icon;
+  const agentLabel = compact ? "" : `[${AGENT_LABELS[entry.agent] || entry.agent}]`;
+  const time = new Date(entry.ts * 1000);
+  const timeStr = time.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  return (
+    <div className="flex items-start gap-1.5 leading-tight py-0.5 hover:bg-white/5 rounded px-1 group">
+      <span className="text-muted-foreground/60 shrink-0 w-[60px]">{timeStr}</span>
+      <Icon className={`h-3 w-3 mt-0.5 shrink-0 ${style.color}`} />
+      <span className={`shrink-0 font-bold ${style.color} w-[72px]`}>{style.label}</span>
+      {!compact && (
+        <span className="text-primary/80 shrink-0">{agentLabel}</span>
+      )}
+      <span className="text-foreground">{entry.action}</span>
+      {entry.detail && (
+        <span className="text-muted-foreground/70 truncate hidden group-hover:inline">
+          &#8212; {entry.detail}
+        </span>
+      )}
     </div>
   );
 }

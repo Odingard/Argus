@@ -271,6 +271,7 @@ class ScanState:
         self.agents: dict[str, dict[str, Any]] = {}
         self.findings: list[dict[str, Any]] = []
         self.signals: list[dict[str, Any]] = []
+        self.activity_log: list[dict[str, Any]] = []  # per-agent activity feed
         self.events_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self.subscribers: list[asyncio.Queue[dict[str, Any]]] = []
         self.scan_task: asyncio.Task | None = None
@@ -287,6 +288,7 @@ class ScanState:
         self.agents = {}
         self.findings = []
         self.signals = []
+        self.activity_log = []
         # Don't clear subscribers — they're long-lived
 
     def add_finding(self, finding_data: dict[str, Any]) -> None:
@@ -301,6 +303,12 @@ class ScanState:
         self.signals.append(signal)
         if len(self.signals) > MAX_SIGNALS_IN_MEMORY:
             self.signals = self.signals[-MAX_SIGNALS_IN_MEMORY:]
+
+    def add_activity(self, entry: dict[str, Any]) -> None:
+        """Append an activity log entry (bounded to last 500 per scan)."""
+        self.activity_log.append(entry)
+        if len(self.activity_log) > 500:
+            self.activity_log = self.activity_log[-500:]
 
     @property
     def elapsed_seconds(self) -> float:
@@ -340,6 +348,7 @@ class ScanState:
             "agents": self.agents,
             "recent_findings": self.findings[-MAX_RECENT_FINDINGS_RETURNED:],
             "signal_count": len(self.signals),
+            "activity_log": self.activity_log[-200:],
         }
 
     async def broadcast(self, event_type: str, payload: Any) -> None:
@@ -554,10 +563,39 @@ def create_app() -> FastAPI:
                         agent["status"] = "running"
                         agent["started_at"] = time.time()
                         agent["current_action"] = "Deployed — beginning attack..."
+                        state.add_activity(
+                            {
+                                "agent": agent_id,
+                                "ts": signal.timestamp.isoformat(),
+                                "category": "status",
+                                "action": "Agent deployed",
+                                "detail": "Beginning attack sequence...",
+                            }
+                        )
                     elif new_status == "completed":
                         agent["status"] = "completed"
                         agent["completed_at"] = time.time()
                         agent["current_action"] = "Mission complete"
+                        state.add_activity(
+                            {
+                                "agent": agent_id,
+                                "ts": signal.timestamp.isoformat(),
+                                "category": "status",
+                                "action": "Mission complete",
+                                "detail": f"{agent.get('findings_count', 0)} findings reported",
+                            }
+                        )
+                    elif new_status == "skipped":
+                        reason = signal.data.get("reason", "skipped")[:120]
+                        state.add_activity(
+                            {
+                                "agent": agent_id,
+                                "ts": signal.timestamp.isoformat(),
+                                "category": "status",
+                                "action": "Skipped",
+                                "detail": reason,
+                            }
+                        )
 
                 elif signal.signal_type == SignalType.FINDING:
                     finding_data = signal.data.get("finding", {})
@@ -565,7 +603,19 @@ def create_app() -> FastAPI:
                     if finding_data.get("status") == "validated":
                         agent["validated_count"] += 1
                     title = finding_data.get("title", "")
+                    severity = finding_data.get("severity", "info")
+                    technique = finding_data.get("technique", "")
                     agent["current_action"] = f"Found: {title[:80]}"
+
+                    state.add_activity(
+                        {
+                            "agent": agent_id,
+                            "ts": signal.timestamp.isoformat(),
+                            "category": "finding",
+                            "action": f"VULN FOUND: {title[:100]}",
+                            "detail": f"Severity: {severity} | Technique: {technique}",
+                        }
+                    )
 
                     # Truncate raw_request/raw_response before broadcasting on
                     # SSE — large target responses can blow out browser memory
@@ -583,7 +633,43 @@ def create_app() -> FastAPI:
                 elif signal.signal_type == SignalType.PARTIAL_FINDING:
                     data_summary = str(signal.data.get("type", "probing"))[:60]
                     agent["current_action"] = f"Probing: {data_summary}"
+                    state.add_activity(
+                        {
+                            "agent": agent_id,
+                            "ts": signal.timestamp.isoformat(),
+                            "category": "probe",
+                            "action": f"Probing: {data_summary}",
+                            "detail": str(signal.data.get("summary", ""))[:120],
+                        }
+                    )
 
+                elif signal.signal_type == SignalType.AGENT_ACTIVITY:
+                    action = signal.data.get("action", "")[:120]
+                    detail = signal.data.get("detail", "")[:200]
+                    category = signal.data.get("category", "technique")
+                    agent["current_action"] = action
+                    state.add_activity(
+                        {
+                            "agent": agent_id,
+                            "ts": signal.timestamp.isoformat(),
+                            "category": category,
+                            "action": action,
+                            "detail": detail,
+                        }
+                    )
+
+            # Broadcast activity event separately for real-time feed
+            if signal.signal_type == SignalType.AGENT_ACTIVITY:
+                await state.broadcast(
+                    "activity",
+                    {
+                        "agent": signal.source_agent,
+                        "ts": signal.timestamp.isoformat(),
+                        "category": signal.data.get("category", "technique"),
+                        "action": signal.data.get("action", "")[:120],
+                        "detail": signal.data.get("detail", "")[:200],
+                    },
+                )
             await state.broadcast("signal", state.snapshot())
 
         await orchestrator.signal_bus.subscribe_broadcast(signal_handler)

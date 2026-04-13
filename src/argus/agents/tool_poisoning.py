@@ -62,27 +62,67 @@ class ToolPoisoningAgent(LLMAttackAgent):
         logger.info("Tool Poisoning Agent starting — target: %s", self.config.target.name)
 
         # Phase 1: Scan existing tool definitions for hidden content
+        await self.emit_activity(
+            "Scanning tool definitions for hidden content",
+            "Zero-width chars, HTML comments, invisible unicode injection",
+            category="recon",
+        )
         await self._scan_existing_tools(sandbox)
 
         # Phase 1b: Scan tool RETURN values for adversarial content
+        await self.emit_activity(
+            "Scanning tool return values for injection",
+            "Probing tool outputs with sensitive defaults",
+            category="probe",
+        )
         await self._scan_tool_outputs(sandbox)
 
         # Phase 2: Test if model follows hidden instructions in descriptions
+        await self.emit_activity(
+            "Testing hidden instruction following",
+            "Crafting poisoned tool definitions with embedded directives",
+            category="technique",
+        )
         await self._test_hidden_instruction_following(sandbox)
 
         # Phase 3: Test cross-tool instruction chaining
+        await self.emit_activity(
+            "Testing cross-tool instruction chaining",
+            "Tool A instructs model to call Tool B with adversarial args",
+            category="technique",
+        )
         await self._test_cross_tool_chaining(sandbox)
 
         # Phase 4: Test tool shadowing / name collision
+        await self.emit_activity(
+            "Testing tool shadowing / name collision",
+            "Registering tools with conflicting names across MCP servers",
+            category="technique",
+        )
         await self._test_tool_shadowing(sandbox)
 
         # Phase 5: MCP server trust verification
+        await self.emit_activity(
+            "Verifying MCP server trust boundaries",
+            "Testing tool definition integrity and trust differentiation",
+            category="technique",
+        )
         await self._test_mcp_trust(sandbox)
 
         # Phase 6: Infrastructure-as-exfil-channel
+        await self.emit_activity(
+            "Testing infrastructure exfiltration channels",
+            "DNS exfil, HTTP callback beacons, side-channel leakage",
+            category="technique",
+        )
         await self._test_infra_exfil(sandbox)
 
         # Phase 7: Tool schema manipulation / shadow tool injection
+        await self.emit_activity(
+            "Testing schema manipulation attacks",
+            "Shadow tool injection, parameter type confusion",
+            category="technique",
+        )
         await self._test_schema_manipulation(sandbox)
 
         logger.info(

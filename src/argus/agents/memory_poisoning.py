@@ -130,8 +130,19 @@ class MemoryPoisoningAgent(LLMAttackAgent):
             if mcp_base and mcp_base not in bases:
                 bases.append(mcp_base)
 
+        await self.emit_activity(
+            "Surveying memory surfaces",
+            f"Probing {len(bases)} base URL(s) for memory-write and chat endpoints",
+            category="recon",
+        )
+
         for base in bases:
             try:
+                await self.emit_activity(
+                    f"Attacking memory store: {base[:60]}",
+                    "Plant → trigger → observe: testing poison payloads",
+                    category="technique",
+                )
                 await self._attack_base(sandbox, base)
             except Exception as exc:
                 logger.debug("MemoryPoisoning failed for base %s: %s", base, type(exc).__name__)
@@ -139,6 +150,11 @@ class MemoryPoisoningAgent(LLMAttackAgent):
 
         # Phase 2: RAG poisoning — plant adversarial content into knowledge
         # base / RAG store surfaces and trigger retrieval
+        await self.emit_activity(
+            "Phase 2: RAG poisoning",
+            "Planting adversarial documents into knowledge base surfaces",
+            category="technique",
+        )
         for base in bases:
             try:
                 await self._attack_rag(sandbox, base)
