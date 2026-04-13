@@ -283,7 +283,7 @@ _SURFACE_KEYWORDS: list[tuple[re.Pattern[str], SurfaceClass]] = [
 ]
 
 # Body templates for POST probes against dynamically discovered endpoints
-_SURFACE_BODIES: dict[SurfaceClass, dict[str, Any]] = {
+_SURFACE_BODIES: dict[SurfaceClass, dict[str, Any] | None] = {
     SurfaceClass.CHAT: {"message": "hello"},
     SurfaceClass.MEMORY: {"query": "probe"},
     SurfaceClass.IDENTITY: {"message": "probe"},
@@ -496,6 +496,15 @@ class EndpointProber:
                             probed_paths.add(p)
                             new_paths.append(p)
 
+            # Cap at 50 discovered paths to avoid request explosion on verbose targets
+            if len(new_paths) > 50:
+                logger.warning(
+                    "SURVEY %s — discovered %d paths, capping at 50",
+                    self.base_url,
+                    len(new_paths),
+                )
+                new_paths = new_paths[:50]
+
             if new_paths:
                 logger.info(
                     "SURVEY %s — discovered %d new paths from response bodies, probing...",
@@ -578,7 +587,9 @@ class EndpointProber:
                     error=f"{type(exc).__name__}: {str(exc)[:120]}",
                 )
 
-        snippet = resp.text[:1024]
+        # Use a larger snippet for the root probe to capture full endpoint indexes
+        max_snippet = 8192 if path == "/" else 1024
+        snippet = resp.text[:max_snippet]
         keys: list[str] = []
         try:
             data = resp.json()
