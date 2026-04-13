@@ -46,6 +46,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 
+from argus import __version__
 from argus.agents import (
     ContextWindowAgent,
     CrossAgentExfilAgent,
@@ -357,7 +358,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="ARGUS Web Dashboard",
         description="Autonomous AI Red Team Platform — live web dashboard",
-        version="0.1.0",
+        version=__version__,
     )
 
     # Same-origin only by default — explicitly tighten CORS.
@@ -459,7 +460,7 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health() -> dict[str, str]:
         # Public — no auth required
-        return {"status": "ok", "service": "argus-web", "version": "0.1.0"}
+        return {"status": "ok", "service": "argus-web", "version": __version__}
 
     @app.get("/api/status", dependencies=[Depends(require_token)])
     async def status_ep() -> Response:

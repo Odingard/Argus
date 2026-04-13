@@ -23,6 +23,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from argus import __version__
 from argus.models.findings import CompoundAttackPath, Finding
 from argus.orchestrator.engine import ScanResult
 from argus.reporting.cerberus_rules import CerberusRuleGenerator
@@ -76,7 +77,7 @@ class ALECEvidenceExporter:
             "evidence_format": self.EVIDENCE_FORMAT,
             "generated_at": now.isoformat(),
             "generator": "ARGUS Autonomous AI Red Team",
-            "generator_version": "0.1.0",
+            "generator_version": __version__,
             "chain_of_custody": {
                 "created_by": "ARGUS automated scan",
                 "creation_timestamp": now.isoformat(),
