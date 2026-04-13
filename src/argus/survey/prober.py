@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from enum import Enum
 from typing import Any
 from urllib.parse import urlparse
@@ -269,6 +270,30 @@ _PROBE_PATHS: list[tuple[str, str, SurfaceClass, dict[str, Any] | None]] = [
     ("/.well-known/live", "GET", SurfaceClass.HEALTH, None),  # Weaviate
 ]
 
+# Keywords used to classify dynamically discovered paths into surface classes
+_SURFACE_KEYWORDS: list[tuple[re.Pattern[str], SurfaceClass]] = [
+    (re.compile(r"chat|message|conversation|ask|query|triage|review|assess", re.I), SurfaceClass.CHAT),
+    (re.compile(r"memory|context|session|history|document|upload|knowledge|rag", re.I), SurfaceClass.MEMORY),
+    (re.compile(r"agent|execute|orchestrat|task|internal", re.I), SurfaceClass.IDENTITY),
+    (re.compile(r"tool|function|plugin|action|skill", re.I), SurfaceClass.TOOLS),
+    (re.compile(r"pay|transfer|transaction|charge|financial|initiate|confirm", re.I), SurfaceClass.PAYMENT),
+    (re.compile(r"audit|log|exfil|metric|stat|debug|spend", re.I), SurfaceClass.EXFILTRATION),
+    (re.compile(r"admin|config|setting|internal|secret", re.I), SurfaceClass.ADMIN),
+    (re.compile(r"health|ping|status|ready|live", re.I), SurfaceClass.HEALTH),
+]
+
+# Body templates for POST probes against dynamically discovered endpoints
+_SURFACE_BODIES: dict[SurfaceClass, dict[str, Any]] = {
+    SurfaceClass.CHAT: {"message": "hello"},
+    SurfaceClass.MEMORY: {"query": "probe"},
+    SurfaceClass.IDENTITY: {"message": "probe"},
+    SurfaceClass.TOOLS: {"name": "noop", "arguments": {}},
+    SurfaceClass.PAYMENT: {"amount": 0},
+    SurfaceClass.EXFILTRATION: None,
+    SurfaceClass.ADMIN: None,
+    SurfaceClass.HEALTH: None,
+}
+
 
 class DiscoveredEndpoint(BaseModel):
     """A single endpoint discovered by SURVEY."""
@@ -329,11 +354,79 @@ class SurveyReport(BaseModel):
         )
 
 
+def _classify_path(path: str) -> SurfaceClass:
+    """Classify a dynamically discovered path into a surface class by keyword matching."""
+    for pattern, surface in _SURFACE_KEYWORDS:
+        if pattern.search(path):
+            return surface
+    return SurfaceClass.UNKNOWN
+
+
+def _infer_method(path: str, surface: SurfaceClass) -> str:
+    """Infer the likely HTTP method for a discovered path."""
+    # Surfaces that typically accept POST
+    if surface in (SurfaceClass.CHAT, SurfaceClass.PAYMENT, SurfaceClass.TOOL_CALL):
+        return "POST"
+    # Surfaces that are typically GET
+    if surface in (SurfaceClass.HEALTH, SurfaceClass.ADMIN, SurfaceClass.EXFILTRATION):
+        return "GET"
+    # Memory paths: uploads are POST, listings are GET
+    if surface == SurfaceClass.MEMORY:
+        if any(kw in path.lower() for kw in ("upload", "ingest", "index", "search")):
+            return "POST"
+        return "GET"
+    # Identity: agent-message style endpoints are POST
+    if surface == SurfaceClass.IDENTITY:
+        return "POST"
+    # Unknown — try GET first (safer)
+    return "GET"
+
+
+def _extract_paths_from_response(response_text: str, base_url: str) -> list[str]:
+    """Extract API paths from a JSON or HTML response body.
+
+    Looks for:
+    - JSON values that look like relative paths (/foo/bar)
+    - JSON values that are full URLs on the same host
+    - href attributes in HTML
+    """
+    paths: set[str] = set()
+    parsed_base = urlparse(base_url)
+    base_host = parsed_base.netloc
+
+    # Extract quoted strings that look like paths or URLs
+    # Matches: "/agent/01/chat", "https://host/path", '/some/path'
+    for match in re.finditer(r'["\'](/[a-zA-Z0-9_./-]+)["\']', response_text):
+        candidate = match.group(1)
+        # Skip static assets, images, etc.
+        if not re.search(r"\.(css|js|png|jpg|gif|ico|svg|woff|ttf|map)$", candidate, re.I):
+            paths.add(candidate)
+
+    # Extract full URLs on the same host
+    for match in re.finditer(r'https?://([^"\s<>]+)', response_text):
+        full = match.group(0)
+        parsed = urlparse(full)
+        if parsed.netloc == base_host and parsed.path and parsed.path != "/":
+            paths.add(parsed.path)
+
+    # Extract href/src from HTML
+    for match in re.finditer(r'href=["\']([^"\'>]+)["\']', response_text, re.I):
+        href = match.group(1)
+        if href.startswith("/") and not re.search(r"\.(css|js|png|jpg|gif|ico|svg)$", href, re.I):
+            paths.add(href)
+
+    return sorted(paths)
+
+
 class EndpointProber:
     """Probes a single base URL for common AI agent endpoint conventions.
 
     SSRF-bound to one base URL — all probes resolve relative paths against
     that base. Per-probe paths cannot redirect to a different host.
+
+    Autonomous discovery: after the initial probe sweep, examines all live
+    responses for embedded paths/URLs and probes those too. This lets ARGUS
+    find non-standard endpoints (like /agent/01/chat) without needing hints.
     """
 
     def __init__(
@@ -355,7 +448,12 @@ class EndpointProber:
         self._auth_token = auth_token
 
     async def probe_all(self) -> SurveyReport:
-        """Probe the full default path set against the base URL.
+        """Probe the full default path set, then discover and probe new paths.
+
+        Two-phase approach:
+        1. Probe the static seed set (conventional AI agent paths)
+        2. Extract paths from all live responses (JSON bodies, HTML links)
+           and probe any newly discovered paths — autonomous discovery.
 
         Returns a SurveyReport with all discoveries (live and dead).
         """
@@ -370,14 +468,59 @@ class EndpointProber:
             kwargs["headers"] = {"Authorization": f"Bearer {self._auth_token}"}
 
         async with httpx.AsyncClient(**kwargs) as client:
+            # ── Phase 1: probe the root first, then the static seed set ──
+            root_discovery = await self._probe_one(
+                client,
+                "/",
+                "GET",
+                SurfaceClass.UNKNOWN,
+                None,
+            )
             tasks = [
                 self._probe_one(client, path, method, surface, body) for path, method, surface, body in _PROBE_PATHS
             ]
-            discoveries = await asyncio.gather(*tasks)
+            seed_discoveries = await asyncio.gather(*tasks)
+            all_discoveries = [root_discovery, *seed_discoveries]
 
+            # ── Phase 2: autonomous discovery from response bodies ──
+            probed_paths = {p for p, _, _, _ in _PROBE_PATHS} | {"/"}
+            new_paths: list[str] = []
+            for d in all_discoveries:
+                if d.response_text_snippet and d.status_code is not None and d.status_code < 500:
+                    extracted = _extract_paths_from_response(
+                        d.response_text_snippet,
+                        self.base_url,
+                    )
+                    for p in extracted:
+                        if p not in probed_paths:
+                            probed_paths.add(p)
+                            new_paths.append(p)
+
+            if new_paths:
+                logger.info(
+                    "SURVEY %s — discovered %d new paths from response bodies, probing...",
+                    self.base_url,
+                    len(new_paths),
+                )
+                discovery_tasks = []
+                for p in new_paths:
+                    surface = _classify_path(p)
+                    method = _infer_method(p, surface)
+                    body = _SURFACE_BODIES.get(surface) if method == "POST" else None
+                    discovery_tasks.append(self._probe_one(client, p, method, surface, body))
+                    # Also try the other method — a chat endpoint might accept
+                    # both GET (health) and POST (chat). Only add if we haven't
+                    # already queued it.
+                    alt_method = "POST" if method == "GET" else "GET"
+                    alt_body = _SURFACE_BODIES.get(surface) if alt_method == "POST" else None
+                    discovery_tasks.append(self._probe_one(client, p, alt_method, surface, alt_body))
+                extra_discoveries = await asyncio.gather(*discovery_tasks)
+                all_discoveries.extend(extra_discoveries)
+
+        # ── Build report ──
         auth_failures = 0
         report = SurveyReport(target_base_url=self.base_url)
-        for d in discoveries:
+        for d in all_discoveries:
             report.discovered.append(d)
             if d.status_code in (401, 403):
                 auth_failures += 1
@@ -385,12 +528,12 @@ class EndpointProber:
                 report.by_surface.setdefault(d.surface_class.value, []).append(d.path)
         report.auth_failure_count = auth_failures
 
-        live_count = sum(1 for d in discoveries if d.is_live())
+        live_count = sum(1 for d in all_discoveries if d.is_live())
         logger.info(
             "SURVEY %s — %d/%d endpoints live across %d surface classes",
             self.base_url,
             live_count,
-            len(discoveries),
+            len(all_discoveries),
             len(report.by_surface),
         )
         if report.auth_required:
@@ -399,7 +542,7 @@ class EndpointProber:
                 "authentication. Set agent_api_key in the scan request to authenticate.",
                 self.base_url,
                 auth_failures,
-                len(discoveries),
+                len(all_discoveries),
             )
         return report
 
