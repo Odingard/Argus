@@ -301,6 +301,11 @@ class MemoryPoisoningAgent(LLMAttackAgent):
         # Layer 1: New behavior-first evaluation engine
         evidence = quick_eval(text)
         if evidence is not None:
+            # Merge legacy sensitive-marker detection so CRITICAL severity
+            # is preserved when the response contains real leaked secrets.
+            legacy_markers = ResponseMatcher.find_sensitive_markers(text)
+            if legacy_markers:
+                evidence["sensitive_markers"] = legacy_markers
             return evidence
 
         # Layer 2: Legacy pattern matching (backward compat)
