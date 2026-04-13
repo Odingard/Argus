@@ -12,8 +12,10 @@ from urllib.parse import urlparse
 
 import click
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from argus import __version__
 from argus.agents import (
@@ -39,6 +41,7 @@ from argus.orchestrator.engine import Orchestrator
 from argus.reporting.alec_export import ALECEvidenceExporter
 from argus.reporting.renderer import ReportRenderer
 from argus.tiering import Feature, TierRestricted, current_tier
+from argus.ui.colors import AGENT_COLORS
 
 
 def _create_orchestrator() -> Orchestrator:
@@ -118,8 +121,17 @@ def main(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        format="%(message)s",
         datefmt="%H:%M:%S",
+        handlers=[
+            RichHandler(
+                console=console,
+                rich_tracebacks=True,
+                show_time=True,
+                show_path=False,
+                markup=True,
+            )
+        ],
     )
 
 
@@ -300,7 +312,16 @@ def scan(
     orchestrator = _create_orchestrator()
     registered = orchestrator.get_registered_agents()
 
-    console.print(f"[bold]Deploying {len(registered)} agents simultaneously...[/]\n")
+    # Show agents with their colors
+    agent_list = Text()
+    for i, at in enumerate(registered):
+        color = AGENT_COLORS.get(at, "white")
+        if i > 0:
+            agent_list.append(" · ", style="dim")
+        agent_list.append(at.value, style=f"bold {color}")
+    console.print(f"[bold]Deploying {len(registered)} agents simultaneously:[/]")
+    console.print(agent_list)
+    console.print()
 
     result = asyncio.run(orchestrator.run_scan(target=target, timeout=timeout))
 
@@ -316,7 +337,7 @@ def scan(
         console.print(f"[yellow]Warning: Could not persist scan: {type(exc).__name__}[/]")
 
     renderer = ReportRenderer()
-    console.print(renderer.render_summary(result))
+    renderer.render_rich_summary(result, console)
 
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)

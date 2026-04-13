@@ -30,6 +30,7 @@ from argus.models.agents import AgentType, TargetConfig
 from argus.models.findings import FindingSeverity
 from argus.orchestrator.engine import Orchestrator, ScanResult
 from argus.orchestrator.signal_bus import Signal, SignalType
+from argus.ui.colors import AGENT_COLORS
 
 SEVERITY_STYLES = {
     FindingSeverity.CRITICAL: "bold red on white",
@@ -37,20 +38,6 @@ SEVERITY_STYLES = {
     FindingSeverity.MEDIUM: "bold yellow",
     FindingSeverity.LOW: "cyan",
     FindingSeverity.INFO: "dim",
-}
-
-AGENT_COLORS = {
-    AgentType.PROMPT_INJECTION: "bright_red",
-    AgentType.TOOL_POISONING: "bright_magenta",
-    AgentType.SUPPLY_CHAIN: "bright_yellow",
-    AgentType.MEMORY_POISONING: "bright_blue",
-    AgentType.IDENTITY_SPOOF: "bright_cyan",
-    AgentType.CONTEXT_WINDOW: "bright_green",
-    AgentType.CROSS_AGENT_EXFIL: "red",
-    AgentType.PRIVILEGE_ESCALATION: "magenta",
-    AgentType.RACE_CONDITION: "yellow",
-    AgentType.MODEL_EXTRACTION: "blue",
-    AgentType.CORRELATION: "bright_white",
 }
 
 

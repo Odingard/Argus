@@ -214,7 +214,10 @@ class Orchestrator:
     def register_agent(self, agent_type: AgentType, agent_class: type[BaseAttackAgent]) -> None:
         """Register an attack agent class for deployment."""
         self._agent_registry[agent_type] = agent_class
-        logger.info("Registered agent: %s", agent_type.value)
+        from argus.ui.colors import agent_color
+
+        color = agent_color(agent_type)
+        logger.info("Registered agent: [bold %s]%s[/]", color, agent_type.value)
 
     def get_registered_agents(self) -> list[AgentType]:
         return list(self._agent_registry.keys())
@@ -285,7 +288,7 @@ class Orchestrator:
         await scan_signal_bus.clear_history()
 
         logger.info(
-            "ARGUS SCAN %s — Deploying %d agents against target '%s'",
+            "ARGUS SCAN %s — Deploying [bold]%d[/] agents against target [bold]'%s'[/]",
             scan_id[:8],
             len(types_to_deploy),
             target.name,
@@ -311,7 +314,7 @@ class Orchestrator:
             self._active_agents[config.instance_id] = agent
 
         # T=0 — Deploy all agents simultaneously
-        logger.info("T=0 — All %d agents launching simultaneously", len(agents))
+        logger.info("T=0 — All [bold]%d[/] agents launching simultaneously", len(agents))
         tasks = [
             asyncio.create_task(
                 self._run_agent_with_timeout(agent, timeout),
@@ -327,8 +330,12 @@ class Orchestrator:
         all_findings: list[Finding] = []
         for i, agent_result in enumerate(agent_results):
             if isinstance(agent_result, Exception):
+                from argus.ui.colors import agent_color
+
+                a_color = agent_color(agents[i].agent_type)
                 logger.error(
-                    "Agent %s failed with exception: %s",
+                    "Agent [bold %s]%s[/] failed with exception: %s",
+                    a_color,
                     agents[i].agent_type.value,
                     type(agent_result).__name__,
                 )
@@ -425,15 +432,22 @@ class Orchestrator:
             return result
 
         except TimeoutError:
+            from argus.ui.colors import agent_color
+
+            a_color = agent_color(agent.agent_type)
             logger.warning(
-                "Agent %s timed out after %.0fs",
+                "Agent [bold %s]%s[/] timed out after %.0fs",
+                a_color,
                 agent.agent_type.value,
                 timeout,
             )
             return agent.build_result(AgentStatus.TIMED_OUT, started_at, errors=["Timed out"])
 
         except Exception as exc:
-            logger.error("Agent %s crashed: %s", agent.agent_type.value, type(exc).__name__)
+            from argus.ui.colors import agent_color
+
+            a_color = agent_color(agent.agent_type)
+            logger.error("Agent [bold %s]%s[/] crashed: %s", a_color, agent.agent_type.value, type(exc).__name__)
             logger.debug("Agent %s full exception: %s", agent.agent_type.value, exc)
             # Sanitize: only the exception class name reaches the result.
             return agent.build_result(AgentStatus.FAILED, started_at, errors=[type(exc).__name__])
