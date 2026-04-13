@@ -352,7 +352,7 @@ class ScanState:
             "agents": self.agents,
             "recent_findings": self.findings[-MAX_RECENT_FINDINGS_RETURNED:],
             "signal_count": len(self.signals),
-            "activity_log": self.activity_log[-200:],
+            "activity_log": self.activity_log,
             "activity_log_total": self._activity_seq,
         }
 
