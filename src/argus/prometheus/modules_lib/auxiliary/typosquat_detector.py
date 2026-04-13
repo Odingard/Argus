@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from argus import __version__
 from argus.mcp_client import MCPAttackClient, MCPServerConfig
 from argus.prometheus.modules import (
     AuxiliaryModule,
@@ -124,7 +125,7 @@ class TyposquatDetector(AuxiliaryModule):
                             "params": {
                                 "protocolVersion": "2024-11-05",
                                 "capabilities": {},
-                                "clientInfo": {"name": "argus", "version": "0.1.0"},
+                                "clientInfo": {"name": "argus", "version": __version__},
                             },
                         },
                     )

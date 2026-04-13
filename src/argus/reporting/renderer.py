@@ -11,6 +11,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from argus import __version__
 from argus.models.findings import Finding, FindingSeverity
 from argus.orchestrator.engine import ScanResult
 
@@ -78,7 +79,7 @@ class ReportRenderer:
 
     def _build_report(self, scan_result: ScanResult) -> dict[str, Any]:
         return {
-            "argus_version": "0.1.0",
+            "argus_version": __version__,
             "report_generated": datetime.now(UTC).isoformat(),
             "scan": scan_result.summary(),
             "findings": [f.model_dump() for f in scan_result.findings],

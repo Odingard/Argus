@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from argus import __version__
 from argus.mcp_client.models import MCPCallResult, MCPServerConfig, MCPTool, MCPToolParameter
 
 logger = logging.getLogger(__name__)
@@ -350,7 +351,7 @@ class MCPAttackClient:
             {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "argus-attack-client", "version": "0.1.0"},
+                "clientInfo": {"name": "argus-attack-client", "version": __version__},
             },
         )
 

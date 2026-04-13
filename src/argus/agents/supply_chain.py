@@ -20,6 +20,7 @@ import json
 import logging
 from typing import Any
 
+from argus import __version__
 from argus.agents.base import LLMAttackAgent
 from argus.mcp_client import MCPAttackClient, MCPServerConfig
 from argus.models.agents import AgentType
@@ -589,7 +590,7 @@ class SupplyChainAgent(LLMAttackAgent):
                             "params": {
                                 "protocolVersion": "2024-11-05",
                                 "capabilities": {},
-                                "clientInfo": {"name": "argus", "version": "0.1.0"},
+                                "clientInfo": {"name": "argus", "version": __version__},
                             },
                         },
                     )
