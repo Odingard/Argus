@@ -29,6 +29,8 @@ from urllib.parse import urlparse
 from argus.agents.base import LLMAttackAgent
 from argus.conductor import (
     ConversationSession,
+    DataCategoryMatcher,
+    ResponseDivergence,
     ResponseMatcher,
     TurnResult,
     TurnSpec,
@@ -228,7 +230,33 @@ class IdentitySpoofAgent(LLMAttackAgent):
             and 200 <= spoofed.status_code < 300
         )
 
-        if not new_priv and not new_markers and not status_change:
+        # Layer 3: Response divergence — quantify how different the two responses are
+        divergence = ResponseDivergence.score(
+            baseline.response_text,
+            spoofed.response_text,
+            agent_type="identity_spoof",
+        )
+
+        # Layer 4: Data category detection — differential scan.
+        # Only count data categories that are NEW in the spoofed response
+        # (not already present in baseline) to avoid false positives when
+        # the target normally returns emails, ARNs, etc.
+        baseline_leaks = DataCategoryMatcher.scan(baseline.response_text)
+        spoofed_leaks = DataCategoryMatcher.scan(spoofed.response_text)
+        data_leaks: dict[str, list[str]] = {}
+        for cat, matches in spoofed_leaks.items():
+            baseline_matches = set(baseline_leaks.get(cat, []))
+            new_matches = [m for m in matches if m not in baseline_matches]
+            if new_matches:
+                data_leaks[cat] = new_matches
+
+        if (
+            not new_priv
+            and not new_markers
+            and not status_change
+            and not divergence.get("is_finding")
+            and not data_leaks
+        ):
             return None
 
         result: dict[str, Any] = {
@@ -237,6 +265,8 @@ class IdentitySpoofAgent(LLMAttackAgent):
             "status_change": status_change,
             "baseline_status": baseline.status_code,
             "spoofed_status": spoofed.status_code,
+            "divergence": divergence,
+            "data_leaks": data_leaks,
         }
         if eval_evidence is not None:
             result["eval_evidence"] = eval_evidence

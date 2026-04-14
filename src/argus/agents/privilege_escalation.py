@@ -25,6 +25,7 @@ from typing import Any
 from argus.agents.base import LLMAttackAgent
 from argus.conductor import (
     ConversationSession,
+    DataCategoryMatcher,
     ResponseMatcher,
     TurnResult,
     TurnSpec,
@@ -838,12 +839,17 @@ class PrivilegeEscalationAgent(LLMAttackAgent):
         markers = ResponseMatcher.find_sensitive_markers(text)
         priv_indicators = ResponseMatcher.find_privilege_indicators(text)
 
-        if not markers and not priv_indicators:
+        # Layer 3: Data category detection — catch real leaked data
+        # (ARNs, file paths, SQL, env vars, connection strings)
+        data_leaks = DataCategoryMatcher.scan(text)
+
+        if not markers and not priv_indicators and not data_leaks:
             return None
 
         return {
             "sensitive_markers": markers,
             "privilege_indicators": priv_indicators,
+            "data_leaks": data_leaks,
             "response_excerpt": text[:500],
         }
 

@@ -27,7 +27,10 @@ from typing import Any
 
 from argus.agents.base import LLMAttackAgent
 from argus.conductor import (
+    CanaryPropagator,
     ConversationSession,
+    DataCategoryMatcher,
+    ResponseDivergence,
     ResponseMatcher,
     TurnResult,
     TurnSpec,
@@ -291,7 +294,12 @@ class MemoryPoisoningAgent(LLMAttackAgent):
             break
 
     @staticmethod
-    def _evaluate_trigger_response(result: TurnResult) -> dict[str, Any] | None:
+    def _evaluate_trigger_response(
+        result: TurnResult,
+        *,
+        baseline_text: str = "",
+        canaries: list[str] | None = None,
+    ) -> dict[str, Any] | None:
         """Inspect a trigger response for evidence the planted memory executed.
 
         Returns a dict describing the evidence, or None if no leak detected.
@@ -311,14 +319,36 @@ class MemoryPoisoningAgent(LLMAttackAgent):
         # Layer 2: Legacy pattern matching (backward compat)
         markers = ResponseMatcher.find_sensitive_markers(text)
         priv_indicators = ResponseMatcher.find_privilege_indicators(text)
-        # The benchmark scenario explicitly returns canary_extracted in the JSON
-        # — but we don't hardcode that field; the generic indicator search
-        # already catches it.
-        if not markers and not priv_indicators:
+
+        # Layer 3: Data category detection — catch real leaked data
+        data_leaks = DataCategoryMatcher.scan(text)
+
+        # Layer 4: Canary propagation — check if planted probes crossed boundary
+        leaked_canaries = CanaryPropagator.check(text, canaries or [])
+
+        # Layer 5: Response divergence — compare baseline vs trigger response
+        divergence: dict[str, Any] = {}
+        if baseline_text:
+            divergence = ResponseDivergence.score(
+                baseline_text,
+                text,
+                agent_type="default",
+            )
+
+        if (
+            not markers
+            and not priv_indicators
+            and not data_leaks
+            and not leaked_canaries
+            and not divergence.get("is_finding")
+        ):
             return None
         return {
             "sensitive_markers": markers,
             "privilege_indicators": priv_indicators,
+            "data_leaks": data_leaks,
+            "leaked_canaries": leaked_canaries,
+            "divergence": divergence,
             "response_excerpt": text[:500],
         }
 
