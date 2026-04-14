@@ -24,6 +24,8 @@ from argus.survey.prober import (
     EndpointProber,
     SurfaceClass,
     SurveyReport,
+    build_body_for_format,
+    is_ai_response,
 )
 
 __all__ = [
@@ -32,4 +34,6 @@ __all__ = [
     "EndpointProber",
     "SurfaceClass",
     "SurveyReport",
+    "build_body_for_format",
+    "is_ai_response",
 ]
