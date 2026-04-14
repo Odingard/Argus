@@ -13,6 +13,7 @@ against the ARGUS Gauntlet test scenarios.
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 import re
 from enum import Enum
@@ -295,6 +296,118 @@ _SURFACE_BODIES: dict[SurfaceClass, dict[str, Any] | None] = {
 }
 
 
+def _parse_sse_to_text(raw: str) -> str:
+    """Parse a ``text/event-stream`` body into a single coherent text string.
+
+    SSE frames look like::
+
+        data: {"type": "token", "content": "Hello"}
+
+        data: {"type": "token", "content": " world"}
+
+        data: [DONE]
+
+    We concatenate the ``content`` (or ``text`` / ``delta``) values from each
+    JSON ``data:`` frame.  If frames are not JSON we fall back to concatenating
+    the raw ``data:`` values (stripping the prefix).
+    """
+    parts: list[str] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[len("data:") :].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        # Try JSON first — most AI endpoints send structured SSE frames
+        try:
+            obj = _json.loads(payload)
+            if isinstance(obj, dict):
+                # OpenAI-style: choices[0].delta.content
+                choices = obj.get("choices")
+                if isinstance(choices, list) and choices:
+                    delta = choices[0]
+                    if isinstance(delta, dict):
+                        delta_inner = delta.get("delta", delta)
+                        if isinstance(delta_inner, dict):
+                            chunk = delta_inner.get("content") or delta_inner.get("text") or ""
+                            if chunk:
+                                parts.append(str(chunk))
+                                continue
+                # Generic: content / text / token / message field
+                for key in ("content", "text", "token", "message", "response"):
+                    val = obj.get(key)
+                    if val and isinstance(val, str):
+                        parts.append(val)
+                        break
+                else:
+                    # Nested under "data" key
+                    inner = obj.get("data")
+                    if isinstance(inner, dict):
+                        for key in ("content", "text", "token", "message"):
+                            val = inner.get(key)
+                            if val and isinstance(val, str):
+                                parts.append(val)
+                                break
+        except (ValueError, TypeError, KeyError):
+            # Not JSON — use raw data value
+            parts.append(payload)
+    return "".join(parts) if parts else raw[:5000]
+
+
+def build_body_for_format(payload: str, fmt: str, surface: str = "user_input") -> dict[str, Any]:
+    """Build a request body in the format the target expects (T6).
+
+    Parameters
+    ----------
+    payload : str
+        The attack payload text.
+    fmt : str
+        One of ``"message"``, ``"openai"``, ``"prompt"``, ``"input"``.
+    surface : str
+        Surface label for context metadata.
+    """
+    if fmt == "openai":
+        return {"model": "probe", "messages": [{"role": "user", "content": payload}]}
+    if fmt == "prompt":
+        return {"prompt": payload}
+    if fmt == "input":
+        return {"input": payload}
+    # Default: generic message format
+    return {"message": payload, "context": {"source": surface}}
+
+
+def _is_html_catchall(content_type: str, body: str) -> bool:
+    """Return True if the response looks like an HTML catch-all (SPA shell, error page).
+
+    SPA targets return the same HTML for every route — a React/Vue/Angular shell.
+    Agents must not treat this as an AI response; divergence would always be 0.
+    """
+    if "text/html" not in content_type.lower():
+        return False
+    trimmed = body.lstrip()[:500].lower()
+    return trimmed.startswith("<!doctype") or trimmed.startswith("<html") or "<head>" in trimmed
+
+
+def is_ai_response(content_type: str, body: str) -> bool:
+    """Return True if the response likely comes from an AI agent (not a static page).
+
+    Returns False for HTML catch-all responses (SPAs), empty bodies, and
+    binary content types.  Returns True for JSON, SSE, plain text with
+    meaningful content, and any other content that could be AI output.
+    """
+    if not body or not body.strip():
+        return False
+    ct = content_type.lower()
+    # Binary / media — never AI
+    if any(t in ct for t in ("image/", "audio/", "video/", "font/", "application/octet-stream")):
+        return False
+    # HTML catch-all — SPA shell, not AI
+    if _is_html_catchall(content_type, body):
+        return False
+    return True
+
+
 class DiscoveredEndpoint(BaseModel):
     """A single endpoint discovered by SURVEY."""
 
@@ -305,16 +418,30 @@ class DiscoveredEndpoint(BaseModel):
     status_code: int | None = None
     response_text_snippet: str = Field(default="", description="First 1KB of response body")
     response_keys: list[str] = Field(default_factory=list, description="Top-level JSON keys")
+    content_type: str = Field(default="", description="Response Content-Type header (T5)")
+    is_html_catchall: bool = Field(default=False, description="True when response is an HTML SPA shell (T1)")
+    request_format: str = Field(
+        default="message",
+        description="Body format that got a successful response: message, openai, prompt, form (T6)",
+    )
     error: str | None = None
 
     def is_live(self) -> bool:
-        """A discovery counts if the server responded with anything other than 404 or transport error."""
+        """A discovery counts if the server responded with something useful.
+
+        Rejects: 404s, transport errors, and HTML catch-all responses (SPA shells
+        that return 200 for every route but contain no AI content).
+        """
         if self.error is not None:
             return False
         if self.status_code is None:
             return False
-        # 404 means the path doesn't exist; 405 means it does but wrong method (still a discovery)
-        return self.status_code != 404
+        if self.status_code == 404:
+            return False
+        # T1: HTML catch-all filter — SPA shells are not live AI endpoints
+        if self.is_html_catchall:
+            return False
+        return True
 
 
 class SurveyReport(BaseModel):
@@ -535,6 +662,7 @@ class EndpointProber:
                 auth_failures += 1
             elif d.is_live():
                 report.by_surface.setdefault(d.surface_class.value, []).append(d.path)
+
         report.auth_failure_count = auth_failures
 
         live_count = sum(1 for d in all_discoveries if d.is_live())
@@ -589,7 +717,16 @@ class EndpointProber:
 
         # Use a larger snippet for the root probe to capture full endpoint indexes
         max_snippet = 8192 if path == "/" else 1024
-        snippet = resp.text[:max_snippet]
+        raw_text = resp.text
+        ct = resp.headers.get("content-type", "")
+
+        # T2: SSE — reassemble streamed text/event-stream frames into
+        # a single coherent response string that agents can evaluate.
+        if "text/event-stream" in ct:
+            snippet = _parse_sse_to_text(raw_text)[:max_snippet]
+        else:
+            snippet = raw_text[:max_snippet]
+
         keys: list[str] = []
         try:
             data = resp.json()
@@ -597,6 +734,18 @@ class EndpointProber:
                 keys = list(data.keys())[:20]
         except Exception as exc:
             logger.debug("Non-JSON response from %s: %s", url, type(exc).__name__)
+
+        html_catch = _is_html_catchall(ct, snippet)
+
+        # T6: Record the body format that succeeded so agents can reuse it
+        fmt = "message"  # default
+        if body is not None:
+            if "messages" in body:
+                fmt = "openai"
+            elif "prompt" in body:
+                fmt = "prompt"
+            elif "input" in body:
+                fmt = "input"
 
         return DiscoveredEndpoint(
             base_url=self.base_url,
@@ -606,6 +755,9 @@ class EndpointProber:
             status_code=resp.status_code,
             response_text_snippet=snippet,
             response_keys=keys,
+            content_type=ct,
+            is_html_catchall=html_catch,
+            request_format=fmt,
         )
 
 

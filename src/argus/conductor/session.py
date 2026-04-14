@@ -168,11 +168,24 @@ class ConversationSession:
                 headers=headers,
             )
             result.status_code = response.status_code
-            # Read body, but only the first _MAX_RESPONSE_BYTES — large targets
-            # could otherwise exhaust memory. Decode best-effort.
-            text = response.text[:_MAX_RESPONSE_BYTES]
-            result.response_text = text
             content_type = response.headers.get("content-type", "")
+            raw_text = response.text[:_MAX_RESPONSE_BYTES]
+
+            # T2: SSE — reassemble streamed frames into coherent text
+            if "text/event-stream" in content_type:
+                from argus.survey.prober import _parse_sse_to_text
+
+                text = _parse_sse_to_text(raw_text)
+            else:
+                text = raw_text
+
+            # T1: HTML catch-all filter — flag but still store the text
+            from argus.survey.prober import _is_html_catchall
+
+            if _is_html_catchall(content_type, text):
+                result.error = "html_response"
+
+            result.response_text = text
             if "application/json" in content_type or text.lstrip().startswith("{"):
                 try:
                     parsed = response.json()

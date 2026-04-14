@@ -1082,25 +1082,48 @@ class PromptInjectionHunter(LLMAttackAgent):
     ) -> dict[str, Any] | None:
         """Send injection to a target agent via HTTP endpoint.
 
+        T2: Handles ``text/event-stream`` (SSE) responses by reassembling
+            streamed frames into a single text string.
+        T6: Uses ``build_body_for_format`` to send the body shape the target
+            expects (auto-detected during SURVEY or defaulting to ``message``).
+
         Security: httpx event hooks disabled to prevent credential logging.
         """
         import httpx
+
+        from argus.survey.prober import _parse_sse_to_text, build_body_for_format
 
         try:
             async with httpx.AsyncClient(
                 timeout=30,
                 event_hooks={"request": [], "response": []},
             ) as client:
-                headers = {}
+                headers: dict[str, str] = {}
                 if self.config.target.agent_api_key:
                     headers["Authorization"] = f"Bearer {self.config.target.agent_api_key}"
 
+                # T6: Negotiate body format — use survey-detected format if available
+                fmt = getattr(self, "_endpoint_format", "message")
+                body = build_body_for_format(payload, fmt, surface)
+
                 response = await client.post(
                     endpoint,
-                    json={"message": payload, "context": {"source": surface}},
+                    json=body,
                     headers=headers,
                 )
                 response.raise_for_status()
+
+                content_type = response.headers.get("content-type", "")
+
+                # T2: SSE — reassemble streamed frames into coherent text
+                if "text/event-stream" in content_type:
+                    resp_text = _parse_sse_to_text(response.text)[:50_000]
+                    return {
+                        "response": resp_text,
+                        "status_code": response.status_code,
+                        "raw": {"sse_reassembled": True, "text": resp_text[:2000]},
+                    }
+
                 data = response.json()
                 # Truncate response to prevent memory bloat from large targets
                 resp_text = str(data.get("response", data.get("content", str(data))))[:50_000]
