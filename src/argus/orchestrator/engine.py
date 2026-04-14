@@ -342,7 +342,7 @@ class Orchestrator:
         all_agent_results: list[AgentResult | Exception] = []
 
         # Timeout budget: Phase 1 gets up to 1/3, Phase 2 gets the remainder
-        # (minimum 60s for Phase 2 to avoid trivial timeouts).
+        # (minimum 0.1s for Phase 2 to prevent zero/negative timeout).
         p1_timeout = (timeout / 3.0 if phase2_types else timeout) if phase1_types else 0.0
         scan_start = datetime.now(UTC)
 
