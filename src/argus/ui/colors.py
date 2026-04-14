@@ -24,7 +24,7 @@ AGENT_COLORS: dict[AgentType, str] = {
     AgentType.PERSONA_HIJACKING: "green",
     AgentType.MEMORY_BOUNDARY_COLLAPSE: "cyan",
     # MCP Scanner
-    AgentType.MCP_SCANNER: "bright_yellow",
+    AgentType.MCP_SCANNER: "deep_sky_blue1",
     # Correlation
     AgentType.CORRELATION: "bright_white",
 }

@@ -177,7 +177,9 @@ class ConversationSession:
             turn_name=spec.name,
             request_method=spec.method,
             request_url=url,
-            request_body=spec.body,
+            request_body=spec.body
+            if spec.multipart_files is None
+            else {"_multipart": True, **(spec.multipart_data or {})},
             request_headers=headers,
         )
         start = time.monotonic()
