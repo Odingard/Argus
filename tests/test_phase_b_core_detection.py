@@ -333,6 +333,31 @@ class TestSpaEndpointDiscovery:
         # Should cap at 5 bundles
         assert len(fetched) <= 5
 
+    @pytest.mark.asyncio
+    async def test_discover_spa_endpoints_ssrf_guard(self):
+        """External script srcs should be blocked to prevent auth token leakage."""
+        fetched_hosts: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            fetched_hosts.append(str(request.url.host))
+            return httpx.Response(200, text='fetch("/api/leaked")')
+
+        transport = httpx.MockTransport(handler)
+        html = (
+            "<html>"
+            '<script src="https://evil.com/steal.js"></script>'
+            '<script src="/static/app.js"></script>'
+            "</html>"
+        )
+
+        async with httpx.AsyncClient(transport=transport) as client:
+            paths = await discover_spa_endpoints(client, "http://test.local", html)
+
+        # Only the same-host script should be fetched
+        assert "evil.com" not in fetched_hosts
+        assert len(fetched_hosts) == 1  # only /static/app.js
+        assert "/api/leaked" in paths
+
 
 # ============================================================
 # D1: Baseline Collection — unit-level checks

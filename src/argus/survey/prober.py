@@ -690,9 +690,17 @@ async def discover_spa_endpoints(
         return []
 
     # Resolve relative script URLs against the base
+    parsed_base = urlparse(base_url)
+    base_host = parsed_base.netloc
     resolved: list[str] = []
     for src in script_srcs[:_SPA_MAX_BUNDLES]:
         if src.startswith(("http://", "https://")):
+            # SSRF guard: only fetch scripts from the same host to prevent
+            # auth token leakage to attacker-controlled URLs.
+            parsed_src = urlparse(src)
+            if parsed_src.netloc != base_host:
+                logger.debug("T4: skipping external script src %s (host mismatch)", src)
+                continue
             resolved.append(src)
         elif src.startswith("/"):
             resolved.append(f"{base_url.rstrip('/')}{src}")

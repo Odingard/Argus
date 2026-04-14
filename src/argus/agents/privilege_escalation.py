@@ -861,6 +861,9 @@ class PrivilegeEscalationAgent(LLMAttackAgent):
             )
             try:
                 result = await session.turn(spec)
+                if not result.ok():
+                    self._baseline_response = None
+                    return
                 self._baseline_response = result.response_text
                 logger.info(
                     "PrivilegeEscalation: baseline collected (%d chars)",

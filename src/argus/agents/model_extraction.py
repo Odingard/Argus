@@ -345,8 +345,8 @@ class ModelExtractionAgent(LLMAttackAgent):
             )
             break
 
-    @staticmethod
     def _evaluate_response(
+        self,
         result: TurnResult,
         technique: str,
     ) -> dict[str, Any] | None:
@@ -415,6 +415,12 @@ class ModelExtractionAgent(LLMAttackAgent):
             eval_evidence = quick_eval(text)
             if eval_evidence is not None and eval_evidence.get("matched_signatures"):
                 return eval_evidence
+
+            # D1: ResponseDivergence fallback — compare against baseline
+            divergence_result = self._check_divergence(result)
+            if divergence_result is not None:
+                return divergence_result
+
             return None
 
         return {
