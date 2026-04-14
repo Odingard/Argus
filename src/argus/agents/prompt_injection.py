@@ -30,7 +30,7 @@ import logging
 from typing import Any
 
 from argus.agents.base import LLMAttackAgent
-from argus.conductor import quick_eval
+from argus.conductor import DataCategoryMatcher, quick_eval
 from argus.corpus.manager import AttackCategory
 from argus.models.agents import AgentType
 from argus.models.findings import (
@@ -1266,6 +1266,11 @@ class PromptInjectionHunter(LLMAttackAgent):
         # existing >=2-indicator threshold for softer phrase-based detection.
         eval_evidence = quick_eval(response)
         if eval_evidence is not None and eval_evidence.get("matched_signatures"):
+            return True
+
+        # Layer: Data category detection — real data leaked (ARNs, SQL,
+        # connection strings, private keys, JWTs, etc.)
+        if DataCategoryMatcher.has_leaks(response):
             return True
 
         return False

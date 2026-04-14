@@ -29,6 +29,8 @@ from urllib.parse import urlparse
 from argus.agents.base import LLMAttackAgent
 from argus.conductor import (
     ConversationSession,
+    DataCategoryMatcher,
+    ResponseDivergence,
     ResponseMatcher,
     TurnResult,
     TurnSpec,
@@ -228,7 +230,23 @@ class IdentitySpoofAgent(LLMAttackAgent):
             and 200 <= spoofed.status_code < 300
         )
 
-        if not new_priv and not new_markers and not status_change:
+        # Layer 3: Response divergence — quantify how different the two responses are
+        divergence = ResponseDivergence.score(
+            baseline.response_text,
+            spoofed.response_text,
+            agent_type="identity_spoof",
+        )
+
+        # Layer 4: Data category detection — real leaked data in spoofed response
+        data_leaks = DataCategoryMatcher.scan(spoofed.response_text)
+
+        if (
+            not new_priv
+            and not new_markers
+            and not status_change
+            and not divergence.get("is_finding")
+            and not data_leaks
+        ):
             return None
 
         result: dict[str, Any] = {
@@ -237,6 +255,8 @@ class IdentitySpoofAgent(LLMAttackAgent):
             "status_change": status_change,
             "baseline_status": baseline.status_code,
             "spoofed_status": spoofed.status_code,
+            "divergence": divergence,
+            "data_leaks": data_leaks,
         }
         if eval_evidence is not None:
             result["eval_evidence"] = eval_evidence

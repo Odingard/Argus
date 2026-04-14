@@ -26,8 +26,11 @@ Design notes:
 
 from argus.conductor.evaluation import (
     BehaviorEvaluator,
+    CanaryPropagator,
+    DataCategoryMatcher,
     EvalResult,
     EvalSpec,
+    ResponseDivergence,
     RunRecord,
     ToolCall,
     quick_eval,
@@ -43,9 +46,12 @@ from argus.conductor.session import (
 __all__ = [
     "AttackSequence",
     "BehaviorEvaluator",
+    "CanaryPropagator",
     "ConversationSession",
+    "DataCategoryMatcher",
     "EvalResult",
     "EvalSpec",
+    "ResponseDivergence",
     "ResponseMatcher",
     "RunRecord",
     "ToolCall",
