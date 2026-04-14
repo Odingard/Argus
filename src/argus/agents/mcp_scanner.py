@@ -255,7 +255,7 @@ class MCPScannerAgent(LLMAttackAgent):
                             owasp_agentic=OWASPAgenticCategory.TOOL_MISUSE,
                             direct_evidence=True,
                             proof_of_exploitation=(
-                                f"Direct observation: param '{tool.name}.{param.name}' " f"contains: {injection}"
+                                f"Direct observation: param '{tool.name}.{param.name}' contains: {injection}"
                             ),
                         )
                         await self.emit_finding(finding)
@@ -431,6 +431,11 @@ class MCPScannerAgent(LLMAttackAgent):
                     raw_request=json.dumps({"name": tool.name, "arguments": confused_args})[:5000],
                     raw_response=output_text[:5000],
                     owasp_agentic=OWASPAgenticCategory.TOOL_MISUSE,
+                    direct_evidence=True,
+                    proof_of_exploitation=(
+                        f"Tool '{tool.name}' accepted type-confused arguments "
+                        f"({json.dumps(confused_args)[:100]}) and returned a successful response"
+                    ),
                 )
                 await self.emit_finding(finding)
 

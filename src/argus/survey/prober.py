@@ -344,7 +344,7 @@ def _parse_ndjson_to_text(raw: str) -> str:
         except (ValueError, TypeError, KeyError):
             # Not JSON — skip non-JSON lines in NDJSON streams
             continue
-    return "".join(parts) if parts else raw[:5000]
+    return "".join(parts) if parts else raw
 
 
 def _parse_sse_to_text(raw: str) -> str:

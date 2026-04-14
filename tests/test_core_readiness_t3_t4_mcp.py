@@ -26,7 +26,7 @@ class TestT3NdjsonParsing:
 
     def test_openai_style_choices_delta(self):
         """OpenAI-compatible NDJSON with choices[0].delta.content."""
-        raw = '{"choices": [{"delta": {"content": "Hi"}}]}\n' '{"choices": [{"delta": {"content": " there"}}]}\n'
+        raw = '{"choices": [{"delta": {"content": "Hi"}}]}\n{"choices": [{"delta": {"content": " there"}}]}\n'
         assert _parse_ndjson_to_text(raw) == "Hi there"
 
     def test_generic_content_field(self):
