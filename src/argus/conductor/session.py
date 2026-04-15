@@ -218,9 +218,9 @@ class ConversationSession:
         self._csrf_token: str | None = None
         self._csrf_fetched = False
         # T7: Connection pooling — when a pool is provided, __aenter__
-        # borrows a shared client instead of creating a private one.
+        # uses the pool's shared transport but creates a private client.
         self._pool = pool
-        self._owns_client = True  # False when using pooled client
+        self._owns_client = True  # set to False in __aenter__ when pool is used
 
     async def __aenter__(self) -> ConversationSession:
         kwargs: dict[str, Any] = {
@@ -240,7 +240,10 @@ class ConversationSession:
         if self._csrf_mode:
             kwargs["cookies"] = httpx.Cookies()
         self._client = httpx.AsyncClient(**kwargs)
-        self._owns_client = True
+        # When using a pooled transport, do NOT close the client on exit —
+        # httpx.AsyncClient.aclose() unconditionally closes its transport,
+        # which would destroy the shared transport for all other sessions.
+        self._owns_client = self._pool is None
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
