@@ -68,7 +68,7 @@ class ConnectionPool:
     _instance: ConnectionPool | None = None
 
     def __init__(self) -> None:
-        self._clients: dict[tuple[str, float], httpx.AsyncClient] = {}
+        self._clients: dict[tuple[str, float, bool], httpx.AsyncClient] = {}
         self._lock = asyncio.Lock()
 
     @classmethod
@@ -86,7 +86,7 @@ class ConnectionPool:
         csrf_mode: bool = False,
     ) -> httpx.AsyncClient:
         """Return (or create) a pooled client for *host* with *timeout*."""
-        key = (host, timeout)
+        key = (host, timeout, csrf_mode)
         async with self._lock:
             if key not in self._clients:
                 kwargs: dict[str, Any] = {
