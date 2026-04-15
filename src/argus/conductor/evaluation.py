@@ -1065,10 +1065,14 @@ class DataCategoryMatcher:
             r"\b(?!(?:0|127|255)\.)" r"(?:(?:25[0-5]|2[0-4]\d|1?\d\d?)\.){3}" r"(?:25[0-5]|2[0-4]\d|1?\d\d?)\b"
         ),
         # IPv6 addresses — full form and common compressed forms
+        # Uses lookaround anchors instead of \b because \b doesn't fire
+        # adjacent to :: (both : and start-of-string are non-word chars).
+        # The fourth alternative covers mid-address :: (e.g. fe80::1, ::ffff:x).
         "pii_ipv6": (
-            r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b"
-            r"|\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b"
-            r"|\b::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}\b"
+            r"(?:^|(?<=\s)|(?<=[=,;]))(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(?=\s|$|[,;])"
+            r"|(?:^|(?<=\s)|(?<=[=,;]))(?:[0-9a-fA-F]{1,4}:){1,7}:(?=\s|$|[,;])"
+            r"|(?:^|(?<=\s)|(?<=[=,;]))::(?:(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4})?(?=\s|$|[,;])"
+            r"|(?:^|(?<=\s)|(?<=[=,;]))(?:[0-9a-fA-F]{1,4}:){1,6}:(?:[0-9a-fA-F]{1,4}:){0,4}[0-9a-fA-F]{1,4}(?=\s|$|[,;])"
         ),
         # Date of birth patterns — common formats that suggest PII context
         # Only matches when preceded by "dob", "birth", "born" context
