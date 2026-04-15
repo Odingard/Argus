@@ -16,10 +16,18 @@ Security notes:
     GETs the target page first, extracts a CSRF token from
     ``<meta name="csrf-token">``, and injects it as ``X-CSRF-Token`` on
     subsequent POSTs.  Cookies are persisted across turns.
+
+T7: Connection Pooling
+  - ``ConnectionPool`` provides shared ``httpx.AsyncClient`` instances keyed
+    by (host, timeout) so multiple agents attacking the same target reuse
+    TCP connections instead of opening new ones for every session.
+  - Pass ``pool=ConnectionPool.shared()`` to ``ConversationSession`` to opt in.
+  - The pool is scan-scoped: call ``await pool.close_all()`` at scan end.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -33,6 +41,84 @@ logger = logging.getLogger(__name__)
 
 # Bound the size of any single response body we hold in memory
 _MAX_RESPONSE_BYTES = 50_000
+
+
+# ---------------------------------------------------------------------------
+# T7: Connection Pooling — shared HTTP clients keyed by (host, timeout)
+# ---------------------------------------------------------------------------
+
+
+class ConnectionPool:
+    """Shared pool of ``httpx.AsyncClient`` instances keyed by (host, timeout).
+
+    Multiple ``ConversationSession`` objects targeting the same host reuse
+    a single underlying TCP connection pool, reducing handshake overhead
+    when many agents attack the same target simultaneously.
+
+    Usage::
+
+        pool = ConnectionPool.shared()  # singleton per process
+        session = ConversationSession(base_url, pool=pool)
+        async with session:
+            ...
+        # At scan end:
+        await pool.close_all()
+    """
+
+    _instance: ConnectionPool | None = None
+
+    def __init__(self) -> None:
+        self._clients: dict[tuple[str, float, bool], httpx.AsyncClient] = {}
+        self._lock = asyncio.Lock()
+
+    @classmethod
+    def shared(cls) -> ConnectionPool:
+        """Return the process-wide singleton pool."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    async def get_client(
+        self,
+        host: str,
+        timeout: float,
+        *,
+        csrf_mode: bool = False,
+    ) -> httpx.AsyncClient:
+        """Return (or create) a pooled client for *host* with *timeout*."""
+        key = (host, timeout, csrf_mode)
+        async with self._lock:
+            if key not in self._clients:
+                kwargs: dict[str, Any] = {
+                    "timeout": timeout,
+                    "event_hooks": {"request": [], "response": []},
+                    "follow_redirects": False,
+                }
+                if csrf_mode:
+                    kwargs["cookies"] = httpx.Cookies()
+                self._clients[key] = httpx.AsyncClient(**kwargs)
+                logger.debug("T7: created pooled client for %s (timeout=%.1f)", host, timeout)
+            return self._clients[key]
+
+    async def close_all(self) -> None:
+        """Close every pooled client. Call at scan teardown."""
+        async with self._lock:
+            for client in self._clients.values():
+                try:
+                    await client.aclose()
+                except Exception as exc:
+                    logger.debug("T7: error closing pooled client: %s", type(exc).__name__)
+            count = len(self._clients)
+            self._clients.clear()
+        if count:
+            logger.debug("T7: closed %d pooled client(s)", count)
+
+    @classmethod
+    async def shutdown(cls) -> None:
+        """Close the singleton pool (if any). Safe to call multiple times."""
+        if cls._instance is not None:
+            await cls._instance.close_all()
+            cls._instance = None
 
 
 class TurnSpec(BaseModel):
@@ -115,6 +201,7 @@ class ConversationSession:
         transport: httpx.AsyncBaseTransport | None = None,
         auth_token: str | None = None,
         csrf_mode: bool = False,
+        pool: ConnectionPool | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/") + "/"
         parsed = urlparse(self.base_url)
@@ -133,25 +220,39 @@ class ConversationSession:
         self._csrf_mode = csrf_mode
         self._csrf_token: str | None = None
         self._csrf_fetched = False
+        # T7: Connection pooling — when a pool is provided, __aenter__
+        # borrows a shared client instead of creating a private one.
+        self._pool = pool
+        self._owns_client = True  # False when using pooled client
 
     async def __aenter__(self) -> ConversationSession:
-        kwargs: dict[str, Any] = {
-            "timeout": self.timeout_seconds,
-            "event_hooks": {"request": [], "response": []},
-            "follow_redirects": False,
-        }
-        if self._transport is not None:
-            kwargs["transport"] = self._transport
-        # T3: enable cookie persistence when CSRF mode is on
-        if self._csrf_mode:
-            kwargs["cookies"] = httpx.Cookies()
-        self._client = httpx.AsyncClient(**kwargs)
+        # T7: prefer pooled client when a pool is provided
+        if self._pool is not None and self._transport is None:
+            self._client = await self._pool.get_client(
+                self._allowed_host,
+                self.timeout_seconds,
+                csrf_mode=self._csrf_mode,
+            )
+            self._owns_client = False
+        else:
+            kwargs: dict[str, Any] = {
+                "timeout": self.timeout_seconds,
+                "event_hooks": {"request": [], "response": []},
+                "follow_redirects": False,
+            }
+            if self._transport is not None:
+                kwargs["transport"] = self._transport
+            # T3: enable cookie persistence when CSRF mode is on
+            if self._csrf_mode:
+                kwargs["cookies"] = httpx.Cookies()
+            self._client = httpx.AsyncClient(**kwargs)
+            self._owns_client = True
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        if self._client is not None:
+        if self._client is not None and self._owns_client:
             await self._client.aclose()
-            self._client = None
+        self._client = None
 
     def _resolve(self, path: str) -> str:
         """Resolve a turn path against the session base_url.
