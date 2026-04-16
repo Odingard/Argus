@@ -116,13 +116,22 @@ def _write_config(data: dict[str, Any]) -> None:
             lines.append(f'{key} = "{_escape_toml_value(str(val))}"')
 
     lines.append("")
-    path.write_text("\n".join(lines))
+    content = "\n".join(lines)
 
-    # Secure permissions: owner read/write only (0600)
+    # Write with secure permissions atomically — avoid world-readable window
     try:
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, content.encode())
+        finally:
+            os.close(fd)
     except OSError:
-        pass  # Windows or other OS without chmod support
+        # Fallback for platforms without os.open support (e.g. some Windows)
+        path.write_text(content)
+        try:
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +216,7 @@ def list_all() -> dict[str, str]:
     for key, value in data.items():
         if isinstance(value, dict):
             for sub_key, sub_val in value.items():
-                result[f"{key}.{sub_key}"] = str(sub_val)
+                result[sub_key] = str(sub_val)
         else:
             result[key] = str(value)
 

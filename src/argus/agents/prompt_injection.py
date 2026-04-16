@@ -1458,9 +1458,11 @@ class PromptInjectionHunter(LLMAttackAgent):
 
                 # Send as multipart/form-data or JSON depending on format
                 if fmt == "formdata":
+                    # httpx: files= sends multipart/form-data, data= sends x-www-form-urlencoded
+                    multipart_fields = {k: (None, v) for k, v in body.items()}
                     response = await client.post(
                         endpoint,
-                        data=body,
+                        files=multipart_fields,
                         headers=headers,
                     )
                 else:
