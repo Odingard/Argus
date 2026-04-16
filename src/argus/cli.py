@@ -302,6 +302,8 @@ def live(
         if "=" in ef:
             k, v = ef.split("=", 1)
             extra_fields_live[k] = v
+        else:
+            console.print(f"[yellow]Warning: ignoring malformed --extra-field '{ef}' (expected key=value)[/]")
 
     target = TargetConfig(
         name=target_name,
@@ -552,6 +554,8 @@ def alec_export(
         if "=" in ef:
             k, v = ef.split("=", 1)
             extra_fields_alec[k] = v
+        else:
+            console.print(f"[yellow]Warning: ignoring malformed --extra-field '{ef}' (expected key=value)[/]")
 
     target = TargetConfig(
         name=target_name,
