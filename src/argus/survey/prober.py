@@ -450,7 +450,10 @@ def build_body_for_format(
         if extra_fields:
             body.update(extra_fields)
         return body
-    return {"message": payload, "context": {"source": surface}}
+    body = {"message": payload, "context": {"source": surface}}
+    if extra_fields:
+        body.update(extra_fields)
+    return body
 
 
 def build_multipart_fields(payload: str, field_name: str = "file") -> dict[str, Any]:
