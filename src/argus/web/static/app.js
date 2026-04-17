@@ -711,7 +711,7 @@ registerPage('settings', async function (el, _params, gen) {
     if (dbData.tables) {
       var keys = Object.keys(dbData.tables);
       tableRows = keys.map(function (k) {
-        return '<div class="setting-row"><span class="setting-label">' + esc(k) + '</span><span class="setting-value">' + dbData.tables[k] + '</span></div>';
+        return '<div class="setting-row"><span class="setting-label">' + esc(k) + '</span><span class="setting-value">' + esc(String(dbData.tables[k])) + '</span></div>';
       }).join('');
     }
     el.innerHTML =
