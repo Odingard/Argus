@@ -985,7 +985,7 @@ class ModelExtractionAgent(LLMAttackAgent):
                 actual_result=f"Multiple models detected: {evidence.get('models_detected', evidence.get('min_similarity', 'N/A'))}",
             ),
         ]
-        proof = f"Model routing exploitation ({technique}) at {chat_path}: " f"{description}. Evidence: {evidence}."
+        proof = f"Model routing exploitation ({technique}) at {chat_path}: {description}. Evidence: {evidence}."
 
         finding = self._build_finding(
             title=title,
