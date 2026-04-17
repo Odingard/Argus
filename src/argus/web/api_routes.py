@@ -1186,6 +1186,7 @@ def create_production_router() -> APIRouter:
             raise HTTPException(status_code=400, detail="Unknown provider")
         set_value(config_key, body.api_key)
         if body.provider == "custom" and body.endpoint:
+            _validate_target_endpoint(body.endpoint)
             set_value("custom_endpoint", body.endpoint)
         return {
             "status": "saved",
@@ -1209,6 +1210,8 @@ def create_production_router() -> APIRouter:
     @router.post("/settings/llm-keys/{provider}/test", dependencies=[Depends(require_role("write"))])
     async def test_llm_key(provider: str) -> dict[str, Any]:
         """Test an LLM API key by making a minimal API call."""
+        import httpx
+
         from argus.config import get
 
         config_key = _PROVIDER_CONFIG_MAP.get(provider)
@@ -1219,60 +1222,56 @@ def create_production_router() -> APIRouter:
             return {"status": "error", "message": "No key configured for this provider"}
 
         try:
-            if provider == "anthropic":
-                import httpx
-
-                r = httpx.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                    json={
-                        "model": "claude-sonnet-4-20250514",
-                        "max_tokens": 1,
-                        "messages": [{"role": "user", "content": "hi"}],
-                    },
-                    timeout=15,
-                )
-                if r.status_code in (200, 201):
-                    return {"status": "ok", "message": "Anthropic API key is valid"}
-                return {"status": "error", "message": f"Anthropic returned {r.status_code}"}
-            elif provider == "openai":
-                import httpx
-
-                r = httpx.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                    timeout=15,
-                )
-                if r.status_code == 200:
-                    return {"status": "ok", "message": "OpenAI API key is valid"}
-                return {"status": "error", "message": f"OpenAI returned {r.status_code}"}
-            elif provider == "google":
-                import httpx
-
-                r = httpx.get(
-                    f"https://generativelanguage.googleapis.com/v1beta/models?key={key}",
-                    timeout=15,
-                )
-                if r.status_code == 200:
-                    return {"status": "ok", "message": "Google API key is valid"}
-                return {"status": "error", "message": f"Google returned {r.status_code}"}
-            elif provider == "custom":
-                endpoint = get("custom_endpoint")
-                if not endpoint:
-                    return {"status": "error", "message": "No custom endpoint configured"}
-                import httpx
-
-                r = httpx.get(
-                    endpoint.rstrip("/") + "/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                    timeout=15,
-                )
-                return {
-                    "status": "ok" if r.status_code == 200 else "error",
-                    "message": f"Endpoint returned {r.status_code}",
-                }
-            else:
-                return {"status": "error", "message": "Unknown provider"}
+            async with httpx.AsyncClient(timeout=15) as client:
+                if provider == "anthropic":
+                    r = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": "claude-sonnet-4-20250514",
+                            "max_tokens": 1,
+                            "messages": [{"role": "user", "content": "hi"}],
+                        },
+                    )
+                    if r.status_code in (200, 201):
+                        return {"status": "ok", "message": "Anthropic API key is valid"}
+                    return {"status": "error", "message": f"Anthropic returned {r.status_code}"}
+                elif provider == "openai":
+                    r = await client.get(
+                        "https://api.openai.com/v1/models",
+                        headers={"Authorization": f"Bearer {key}"},
+                    )
+                    if r.status_code == 200:
+                        return {"status": "ok", "message": "OpenAI API key is valid"}
+                    return {"status": "error", "message": f"OpenAI returned {r.status_code}"}
+                elif provider == "google":
+                    r = await client.get(
+                        f"https://generativelanguage.googleapis.com/v1beta/models?key={key}",
+                    )
+                    if r.status_code == 200:
+                        return {"status": "ok", "message": "Google API key is valid"}
+                    return {"status": "error", "message": f"Google returned {r.status_code}"}
+                elif provider == "custom":
+                    endpoint = get("custom_endpoint")
+                    if not endpoint:
+                        return {"status": "error", "message": "No custom endpoint configured"}
+                    _validate_target_endpoint(endpoint)
+                    r = await client.get(
+                        endpoint.rstrip("/") + "/models",
+                        headers={"Authorization": f"Bearer {key}"},
+                    )
+                    return {
+                        "status": "ok" if r.status_code == 200 else "error",
+                        "message": f"Endpoint returned {r.status_code}",
+                    }
+                else:
+                    return {"status": "error", "message": "Unknown provider"}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             return {"status": "error", "message": str(type(exc).__name__) + ": " + str(exc)[:200]}
 
