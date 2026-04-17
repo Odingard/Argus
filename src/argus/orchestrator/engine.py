@@ -547,7 +547,11 @@ class Orchestrator:
                 )
 
             # Bound the evolution pass to the remaining timeout budget
-            evo_timeout = max(10.0, timeout)  # at least 10s
+            # If no budget remains, skip entirely rather than forcing extra time
+            if timeout <= 0:
+                logger.info("Skipping evolution pass — no timeout budget remaining")
+                return None
+            evo_timeout = max(10.0, timeout)  # at least 10s when budget exists
             logger.info(
                 "Starting adaptive evolution pass (3 generations, %.0fs budget)",
                 evo_timeout,
