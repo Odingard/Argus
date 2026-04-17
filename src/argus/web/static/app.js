@@ -538,7 +538,7 @@ registerPage('scan-detail', async function (el, params, gen) {
 registerPage('findings', async function (el, _params, gen) {
   el.innerHTML = '<div class="content"><div class="page-header"><h1>All Findings</h1></div><div class="page-loading">Loading\u2026</div></div>';
   try {
-    var data = await apiJson('/api/findings/all?limit=200');
+    var data = await apiJson('/api/findings?limit=200');
     if (isStaleNav(gen)) return;
     var findings = data.findings || [];
     var rows = findings.map(function (f) {
@@ -595,7 +595,7 @@ registerPage('attack-chains', async function (el, _params, gen) {
 registerPage('owasp', async function (el, _params, gen) {
   el.innerHTML = '<div class="content"><div class="page-header"><h1>OWASP Coverage</h1></div><div class="page-loading">Loading\u2026</div></div>';
   try {
-    var data = await apiJson('/api/owasp-coverage');
+    var data = await apiJson('/api/owasp/coverage');
     if (isStaleNav(gen)) return;
     var categories = data.categories || [];
     var cards = categories.map(function (c) {
@@ -652,13 +652,13 @@ registerPage('agents', async function (el, _params, gen) {
     if (isStaleNav(gen)) return;
     var agentList = data.agents || [];
     var cards = agentList.map(function (a) {
-      var display = AGENTS[a.agent_type] || { name: a.agent_type, badge: '?', icon: '?', color: '#888' };
+      var display = AGENTS[a.type] || { name: a.type, badge: '?', icon: '?', color: '#888' };
       return '<div class="attacker-card">' +
         '<div class="attacker-header"><div class="attacker-name"><span>' + display.icon + '</span> <span>' + esc(display.name) + '</span> <span class="attacker-badge">' + esc(display.badge) + '</span></div></div>' +
         '<div class="attacker-stats">' +
-          '<div class="stat-item">scans <span class="stat-item-value">' + (a.total_scans || 0) + '</span></div>' +
-          '<div class="stat-item">findings <span class="stat-item-value yellow">' + (a.total_findings || 0) + '</span></div>' +
-          '<div class="stat-item">techniques <span class="stat-item-value">' + (a.total_techniques || 0) + '</span></div>' +
+          '<div class="stat-item">scans <span class="stat-item-value">' + (a.scans || 0) + '</span></div>' +
+          '<div class="stat-item">findings <span class="stat-item-value yellow">' + (a.findings || 0) + '</span></div>' +
+          '<div class="stat-item">techniques <span class="stat-item-value">' + (a.techniques || 0) + '</span></div>' +
         '</div></div>';
     }).join('');
     el.innerHTML =
@@ -675,7 +675,7 @@ registerPage('agents', async function (el, _params, gen) {
 registerPage('corpus', async function (el, _params, gen) {
   el.innerHTML = '<div class="content"><div class="page-header"><h1>Attack Corpus</h1></div><div class="page-loading">Loading\u2026</div></div>';
   try {
-    var data = await apiJson('/api/corpus');
+    var data = await apiJson('/api/corpus/patterns');
     if (isStaleNav(gen)) return;
     var patterns = data.patterns || [];
     var rows = patterns.map(function (p) {
