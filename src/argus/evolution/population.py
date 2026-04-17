@@ -65,7 +65,7 @@ class PopulationManager:
         self.population = []
         categories = list(corpus_patterns.keys())
         for i in range(self.population_size):
-            category = categories[i % len(categories)] if categories else "prompt_injection"
+            category = categories[i % len(categories)] if categories else "prompt_injection_hunter"
             patterns = corpus_patterns.get(category, [])
             genome = AgentGenome(
                 agent_id=f"gen0-{category}-{uuid.uuid4().hex[:6]}",

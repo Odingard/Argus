@@ -42,7 +42,7 @@ class AgentGenome:
     generation: int = 0
 
     # Core attack configuration
-    agent_category: str = "prompt_injection"
+    agent_category: str = "prompt_injection_hunter"
     corpus_patterns: list[str] = field(default_factory=list)
     attack_posture: str = "aggressive"  # aggressive | passive | deceptive | mimetic | fragmented
     confidence_threshold: float = 0.46  # minimum CW score to log as finding
