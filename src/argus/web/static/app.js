@@ -783,7 +783,7 @@ registerPage('settings', async function (el, _params, gen) {
           '<span class="badge" style="background:' + (activeCount > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)') + ';color:' + (activeCount > 0 ? 'var(--accent-green)' : 'var(--text-muted)') + ';">' + activeCount + ' active</span>' +
         '</div>' +
         '<div class="settings-grid">' + providerCards + '</div>' +
-        '<div style="margin-top:12px;padding:10px 14px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:var(--radius-sm);font-size:12px;color:var(--accent-purple);">' +
+        '<div style="margin-top:12px;padding:10px 14px;background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.15);border-radius:var(--radius-sm);font-size:12px;color:var(--accent-purple);">' +
           '\uD83D\uDD12 Keys never leave your machine. Core tier uses keys for Phases 4\u20136 (LLM-augmented variants). Without a key, ARGUS runs in deterministic mode (Phases 1\u20133).' +
         '</div>' +
       '</div>' +
