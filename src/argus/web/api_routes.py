@@ -1138,4 +1138,142 @@ def create_production_router() -> APIRouter:
 
         return {"patterns": patterns, "total": len(patterns)}
 
+    # ------------------------------------------------------------------
+    # LLM API Key Management (stored in ~/.argusrc)
+    # ------------------------------------------------------------------
+
+    class LLMKeySet(BaseModel):
+        provider: str = Field(..., pattern="^(anthropic|openai|google|custom)$")
+        api_key: str = Field(..., min_length=1, max_length=2000)
+        endpoint: str | None = Field(default=None, max_length=500)
+
+    class LLMKeyDelete(BaseModel):
+        provider: str = Field(..., pattern="^(anthropic|openai|google|custom)$")
+
+    _PROVIDER_CONFIG_MAP = {
+        "anthropic": "anthropic_api_key",
+        "openai": "openai_api_key",
+        "google": "google_api_key",
+        "custom": "custom_api_key",
+    }
+
+    @router.get("/settings/llm-keys", dependencies=[Depends(require_role("read"))])
+    async def list_llm_keys() -> dict[str, Any]:
+        """List configured LLM providers with masked keys."""
+        from argus.config import get, mask_key
+
+        providers = []
+        for provider, config_key in _PROVIDER_CONFIG_MAP.items():
+            val = get(config_key)
+            entry: dict[str, Any] = {
+                "provider": provider,
+                "configured": val is not None and len(val) > 0,
+                "masked_key": mask_key(val) if val else None,
+            }
+            if provider == "custom":
+                ep = get("custom_endpoint")
+                entry["endpoint"] = ep
+            providers.append(entry)
+        return {"providers": providers}
+
+    @router.post("/settings/llm-keys", dependencies=[Depends(require_role("write"))])
+    async def set_llm_key(body: LLMKeySet) -> dict[str, Any]:
+        """Save an LLM API key to the persistent config."""
+        from argus.config import mask_key, set_value
+
+        config_key = _PROVIDER_CONFIG_MAP.get(body.provider)
+        if not config_key:
+            raise HTTPException(status_code=400, detail="Unknown provider")
+        set_value(config_key, body.api_key)
+        if body.provider == "custom" and body.endpoint:
+            set_value("custom_endpoint", body.endpoint)
+        return {
+            "status": "saved",
+            "provider": body.provider,
+            "masked_key": mask_key(body.api_key),
+        }
+
+    @router.delete("/settings/llm-keys/{provider}", dependencies=[Depends(require_role("write"))])
+    async def delete_llm_key(provider: str) -> dict[str, Any]:
+        """Remove an LLM API key from the persistent config."""
+        from argus.config import delete as config_delete
+
+        config_key = _PROVIDER_CONFIG_MAP.get(provider)
+        if not config_key:
+            raise HTTPException(status_code=400, detail="Unknown provider")
+        found = config_delete(config_key)
+        if provider == "custom":
+            config_delete("custom_endpoint")
+        return {"status": "deleted" if found else "not_found", "provider": provider}
+
+    @router.post("/settings/llm-keys/{provider}/test", dependencies=[Depends(require_role("write"))])
+    async def test_llm_key(provider: str) -> dict[str, Any]:
+        """Test an LLM API key by making a minimal API call."""
+        from argus.config import get
+
+        config_key = _PROVIDER_CONFIG_MAP.get(provider)
+        if not config_key:
+            raise HTTPException(status_code=400, detail="Unknown provider")
+        key = get(config_key)
+        if not key:
+            return {"status": "error", "message": "No key configured for this provider"}
+
+        try:
+            if provider == "anthropic":
+                import httpx
+
+                r = httpx.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                    json={
+                        "model": "claude-sonnet-4-20250514",
+                        "max_tokens": 1,
+                        "messages": [{"role": "user", "content": "hi"}],
+                    },
+                    timeout=15,
+                )
+                if r.status_code in (200, 201):
+                    return {"status": "ok", "message": "Anthropic API key is valid"}
+                return {"status": "error", "message": f"Anthropic returned {r.status_code}"}
+            elif provider == "openai":
+                import httpx
+
+                r = httpx.get(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=15,
+                )
+                if r.status_code == 200:
+                    return {"status": "ok", "message": "OpenAI API key is valid"}
+                return {"status": "error", "message": f"OpenAI returned {r.status_code}"}
+            elif provider == "google":
+                import httpx
+
+                r = httpx.get(
+                    f"https://generativelanguage.googleapis.com/v1beta/models?key={key}",
+                    timeout=15,
+                )
+                if r.status_code == 200:
+                    return {"status": "ok", "message": "Google API key is valid"}
+                return {"status": "error", "message": f"Google returned {r.status_code}"}
+            elif provider == "custom":
+                endpoint = get("custom_endpoint")
+                if not endpoint:
+                    return {"status": "error", "message": "No custom endpoint configured"}
+                import httpx
+
+                r = httpx.get(
+                    endpoint.rstrip("/") + "/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=15,
+                )
+                return {
+                    "status": "ok" if r.status_code == 200 else "error",
+                    "message": f"Endpoint returned {r.status_code}",
+                }
+            else:
+                return {"status": "error", "message": "Unknown provider"}
+        except Exception as exc:
+            return {"status": "error", "message": str(type(exc).__name__) + ": " + str(exc)[:200]}
+
     return router

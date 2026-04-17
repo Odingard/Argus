@@ -143,6 +143,8 @@ _KEY_MAP: dict[str, str] = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
     "openai_api_key": "OPENAI_API_KEY",
     "google_api_key": "GOOGLE_API_KEY",
+    "custom_api_key": "ARGUS_CUSTOM_API_KEY",
+    "custom_endpoint": "ARGUS_CUSTOM_ENDPOINT",
     "agent_api_key": "ARGUS_AGENT_API_KEY",
     "default_timeout": "ARGUS_TIMEOUT",
     "default_max_rpm": "ARGUS_MAX_RPM",
