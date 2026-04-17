@@ -1184,9 +1184,14 @@ def create_production_router() -> APIRouter:
         config_key = _PROVIDER_CONFIG_MAP.get(body.provider)
         if not config_key:
             raise HTTPException(status_code=400, detail="Unknown provider")
+        # Validate endpoint BEFORE persisting anything to avoid inconsistent state
+        if body.provider == "custom" and body.endpoint:
+            try:
+                _validate_target_endpoint(body.endpoint)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         set_value(config_key, body.api_key)
         if body.provider == "custom" and body.endpoint:
-            _validate_target_endpoint(body.endpoint)
             set_value("custom_endpoint", body.endpoint)
         return {
             "status": "saved",
