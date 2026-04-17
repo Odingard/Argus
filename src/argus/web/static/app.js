@@ -475,11 +475,11 @@ registerPage('scan-detail', async function (el, params, gen) {
   el.innerHTML = '<div class="content"><div class="page-loading">Loading scan details\u2026</div></div>';
   try {
     var results = await Promise.all([
-    if (isStaleNav(gen)) return;
       apiJson('/api/scans/' + scanId),
       apiJson('/api/scans/' + scanId + '/findings'),
       apiJson('/api/scans/' + scanId + '/compound-paths').catch(function () { return { compound_paths: [] }; }),
     ]);
+    if (isStaleNav(gen)) return;
     var scan = results[0].scan || {};
     var agents = results[0].agents || [];
     var findings = results[1].findings || [];
@@ -701,10 +701,10 @@ registerPage('settings', async function (el, _params, gen) {
   el.innerHTML = '<div class="content"><div class="page-header"><h1>Settings</h1></div><div class="page-loading">Loading\u2026</div></div>';
   try {
     var results = await Promise.all([
-    if (isStaleNav(gen)) return;
       apiJson('/api/system/tier').catch(function () { return {}; }),
       apiJson('/api/system/db-status').catch(function () { return {}; }),
     ]);
+    if (isStaleNav(gen)) return;
     var tierData = results[0];
     var dbData = results[1];
     var tableRows = '';
