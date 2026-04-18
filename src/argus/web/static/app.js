@@ -1109,7 +1109,7 @@ registerPage('settings', async function (el, _params, gen) {
       '<div class="settings-grid">' +
         '<div class="card"><h3 class="card-title">Tier Information</h3>' +
           '<div class="setting-row"><span class="setting-label">Active Tier</span><span class="setting-value" style="font-weight:700;color:var(--accent-purple);">' + esc(tierData.name || tierData.tier || 'CORE').toUpperCase() + '</span></div>' +
-          '<div class="setting-row"><span class="setting-label">Version</span><span class="setting-value mono">v' + esc(tierData.version || '0.2.0') + '</span></div>' +
+          '<div class="setting-row"><span class="setting-label">Version</span><span class="setting-value mono">v' + esc(tierData.version || '0.2.1') + '</span></div>' +
           '<div class="setting-row"><span class="setting-label">Features</span><span class="setting-value">' + (tierData.enabled_count || '-') + ' / ' + (tierData.total_count || '-') + '</span></div>' +
         '</div>' +
         '<div class="card"><h3 class="card-title">Database</h3>' +

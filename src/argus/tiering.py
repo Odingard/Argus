@@ -165,9 +165,12 @@ class Tier:
 
     def info(self) -> dict[str, Any]:
         """Return a JSON-serialisable summary of the active tier."""
+        from argus import __version__
+
         return {
             "tier": self.name.value,
             "is_enterprise": self.is_enterprise,
+            "version": __version__,
             "features": {f.value: (f in self._available) for f in Feature},
             "core_features": sorted(f.value for f in _CORE_FEATURES),
             "enterprise_features": sorted(f.value for f in _ENTERPRISE_FEATURES),
