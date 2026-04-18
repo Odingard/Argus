@@ -1254,7 +1254,7 @@ registerPage('settings', async function (el, _params, gen) {
           var combined = proof + ' ' + evidence;
           var match = combined.match(/\[EXTRACTED\]\s*(.+?)(?:\n|$)/i) || combined.match(/(?:password|secret|token|key)\s*(?:is|:|=)\s*["']?([^\s"'<>,]{3,})["']?/i);
           if (match) {
-            csv += '"' + (f.agent_type || '') + '","' + (f.technique || '') + '","' + match[1].trim() + '","' + (f.scan_id || '').slice(0, 8) + '","' + (f.severity || '') + '"\n';
+            csv += '"' + (f.agent_type || '').replace(/"/g, '""') + '","' + (f.technique || '').replace(/"/g, '""') + '","' + match[1].trim().replace(/"/g, '""') + '","' + (f.scan_id || '').slice(0, 8) + '","' + (f.severity || '') + '"\n';
           }
         });
         var blob = new Blob([csv], { type: 'text/csv' });
