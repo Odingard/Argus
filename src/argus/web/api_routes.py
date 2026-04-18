@@ -1270,7 +1270,8 @@ def create_production_router() -> APIRouter:
                     return {"status": "error", "message": f"OpenAI returned {r.status_code}"}
                 elif provider == "google":
                     r = await client.get(
-                        f"https://generativelanguage.googleapis.com/v1beta/models?key={key}",
+                        "https://generativelanguage.googleapis.com/v1beta/models",
+                        params={"key": key},
                     )
                     if r.status_code == 200:
                         return {"status": "ok", "message": "Google API key is valid"}
