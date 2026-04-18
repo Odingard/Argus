@@ -155,7 +155,7 @@ class ReportRenderer:
                 agent_color = agent_color_by_value(f.agent_type)
                 # Surface extracted secrets prominently
                 evidence_text = ""
-                proof = getattr(f, "proof_of_exploitation", "") or ""
+                proof = (f.validation.proof_of_exploitation if f.validation else "") or ""
                 if proof.startswith("[EXTRACTED]"):
                     evidence_text = proof.split("\n")[0]
                 elif f.raw_response:
