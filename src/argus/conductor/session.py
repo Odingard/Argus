@@ -358,10 +358,13 @@ class ConversationSession:
                                 prompt_text = spec.body[key]
                                 break
                     form_data[self._prompt_field] = str(prompt_text)
+                # Use files= parameter to get true multipart/form-data encoding;
+                # httpx sends application/x-www-form-urlencoded with data= dicts.
+                multipart_fields = {k: (None, v) for k, v in form_data.items()}
                 response = await self._client.request(
                     spec.method,
                     url,
-                    data=form_data,
+                    files=multipart_fields,
                     headers=headers,
                 )
             else:
