@@ -78,10 +78,38 @@ def init_db() -> None:
     """Create all tables if they don't exist.
 
     Safe to call multiple times — uses CREATE TABLE IF NOT EXISTS.
+    Seeds a default admin user on first run (username: admin, password: argus-admin).
     """
     engine = get_engine()
     Base.metadata.create_all(engine)
     logger.info("Database tables initialized")
+    _seed_default_admin()
+
+
+def _seed_default_admin() -> None:
+    """Create the default admin user if no users exist yet.
+
+    The default password can be overridden via ARGUS_ADMIN_PASSWORD env var.
+    """
+    try:
+        from argus.db.repository import UserRepository
+
+        repo = UserRepository()
+        try:
+            if repo.user_count() == 0:
+                seed_pw = os.environ.get("ARGUS_ADMIN_PASSWORD", "argus-admin")
+                repo.create(
+                    username="admin",
+                    password=seed_pw,
+                    role="admin",
+                    display_name="Administrator",
+                )
+                logger.info("Seeded default admin user (username: admin)")
+        finally:
+            repo.close()
+    except Exception:  # noqa: S110, BLE001
+        # Don't block startup if seeding fails (e.g. table migration issue)
+        pass
 
 
 def reset_engine() -> None:
