@@ -59,6 +59,7 @@ class RecursivePlanner:
         self._active_campaigns: set[AgentType] = set()
         self._running_tasks: dict[str, asyncio.Task] = {}
         self._intel = AdversarialGraph()
+        self._scan_intel: object | None = None  # live reference to scan's ScanIntelligence
         self._scan_id: str = ""
         self._target: TargetConfig | None = None
         self._verdict: VerdictAdapter | None = None
@@ -147,6 +148,13 @@ class RecursivePlanner:
             )
 
             try:
+                # Re-merge the scan's live ScanIntelligence into our
+                # AdversarialGraph right before spawning so the pivot
+                # agent receives all Phase 1 discoveries accumulated
+                # since attach_to_scan was called.
+                if self._scan_intel is not None:
+                    self._intel.merge_from(self._scan_intel)
+
                 new_agent = self._orch._make_agent(
                     agent_type=agent_type,
                     scan_id=self._scan_id,
@@ -194,10 +202,11 @@ class RecursivePlanner:
         self._active_campaigns.clear()
         self._running_tasks.clear()
 
-        # Merge scan intel into our AdversarialGraph so pivot agents
-        # inherit Phase 1 discoveries (tool names, prompt fragments).
-        if intel is not None:
-            self._intel.merge_from(intel)
+        # Store a live reference to the scan's ScanIntelligence so we
+        # can re-merge before each pivot — Phase 1 agents populate it
+        # *after* attach_to_scan is called, so a single snapshot at
+        # attach time would copy nothing.
+        self._scan_intel = intel
 
         # Subscribe to the orchestrator's signal bus
         await self._orch.signal_bus.subscribe_broadcast(self._handle_signal)

@@ -27,6 +27,12 @@ from argus.scoring.chainability import ChainResult
 
 logger = logging.getLogger(__name__)
 
+
+def _esc(value: str) -> str:
+    """Escape a string for safe embedding in a Python string literal."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+
+
 # ---------------------------------------------------------------------------
 # Jinja2 template for the generated PoC script
 # ---------------------------------------------------------------------------
@@ -135,7 +141,7 @@ class ActionablePoCGenerator:
 
             payload = self._map_node_to_payload(node, target, evidence_map)
             # Escape node name for safe embedding in Python string literals
-            safe_node = node.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+            safe_node = _esc(node)
             step = {
                 "description": f"Triggering {safe_node}",
                 "payload_repr": repr(payload),
@@ -144,14 +150,14 @@ class ActionablePoCGenerator:
             steps.append(step)
 
         # Escape path display for safe embedding in Python string literals
-        safe_path = " -> ".join(n.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") for n in chain.path)
+        safe_path = " -> ".join(_esc(n) for n in chain.path)
         return self._template.render(
-            target_name=target.name.replace('"', '\\"') if target.name else "",
+            target_name=_esc(target.name) if target.name else "",
             score=chain.score,
             path_display=safe_path,
             cve=chain.critical_vulnerability or "",
-            agent_endpoint=target.agent_endpoint or "http://localhost:8000",
-            auth_token=target.agent_api_key or "",
+            agent_endpoint=_esc(target.agent_endpoint or "http://localhost:8000"),
+            auth_token=_esc(target.agent_api_key or ""),
             steps=steps,
         )
 
