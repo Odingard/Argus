@@ -176,14 +176,28 @@ class RecursivePlanner:
         target: TargetConfig,
         verdict: VerdictAdapter,
         demo_pace: float = 0.0,
+        intel: object | None = None,
     ) -> None:
-        """Bind the planner to a specific scan and subscribe to the bus."""
+        """Bind the planner to a specific scan and subscribe to the bus.
+
+        Args:
+            intel: The scan's ``ScanIntelligence`` (populated by Phase 1
+                recon agents).  If provided, pivot agents receive this
+                intelligence so they can leverage model names, system
+                prompt fragments, and tool inventories discovered during
+                recon — instead of starting from a blank slate.
+        """
         self._scan_id = scan_id
         self._target = target
         self._verdict = verdict
         self._demo_pace = demo_pace
         self._active_campaigns.clear()
         self._running_tasks.clear()
+
+        # Merge scan intel into our AdversarialGraph so pivot agents
+        # inherit Phase 1 discoveries (tool names, prompt fragments).
+        if intel is not None:
+            self._intel.merge_from(intel)
 
         # Subscribe to the orchestrator's signal bus
         await self._orch.signal_bus.subscribe_broadcast(self._handle_signal)

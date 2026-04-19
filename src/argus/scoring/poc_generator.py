@@ -134,17 +134,21 @@ class ActionablePoCGenerator:
                 continue
 
             payload = self._map_node_to_payload(node, target, evidence_map)
+            # Escape node name for safe embedding in Python string literals
+            safe_node = node.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
             step = {
-                "description": f"Triggering {node}",
+                "description": f"Triggering {safe_node}",
                 "payload_repr": repr(payload),
                 "verify_keyword": self._get_verification_trigger(node),
             }
             steps.append(step)
 
+        # Escape path display for safe embedding in Python string literals
+        safe_path = " -> ".join(n.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") for n in chain.path)
         return self._template.render(
-            target_name=target.name,
+            target_name=target.name.replace('"', '\\"') if target.name else "",
             score=chain.score,
-            path_display=" -> ".join(chain.path),
+            path_display=safe_path,
             cve=chain.critical_vulnerability or "",
             agent_endpoint=target.agent_endpoint or "http://localhost:8000",
             auth_token=target.agent_api_key or "",

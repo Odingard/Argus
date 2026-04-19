@@ -359,6 +359,7 @@ class Orchestrator:
             target=target,
             verdict=verdict_adapter,
             demo_pace=demo_pace_seconds,
+            intel=intel,
         )
 
         # ── Autonomous format detection ──
