@@ -237,6 +237,35 @@ class Orchestrator:
     def get_registered_agents(self) -> list[AgentType]:
         return list(self._agent_registry.keys())
 
+    def _make_agent(
+        self,
+        agent_type: AgentType,
+        scan_id: str,
+        target: TargetConfig,
+        demo_pace_seconds: float,
+        verdict_adapter: VerdictAdapter,
+        intel: ScanIntelligence,
+        signal_bus: SignalBus | None = None,
+    ) -> BaseAttackAgent:
+        """Create and configure an attack agent instance.
+
+        Promoted to an instance method so the RecursivePlanner (and any
+        future sub-orchestrators) can spawn agents dynamically mid-scan.
+        """
+        config = AgentConfig(
+            agent_type=agent_type,
+            scan_id=scan_id,
+            target=target,
+            demo_pace_seconds=demo_pace_seconds,
+        )
+        agent_class = self._agent_registry[agent_type]
+        bus = signal_bus or self.signal_bus
+        agent = agent_class(config=config, signal_bus=bus)
+        agent.attach_verdict_adapter(verdict_adapter)
+        agent.attach_intel(intel)
+        self._active_agents[config.instance_id] = agent
+        return agent
+
     async def run_scan(
         self,
         target: TargetConfig,
@@ -318,25 +347,133 @@ class Orchestrator:
         # Shared intelligence context — Phase 1 writes, Phase 2 reads
         intel = ScanIntelligence()
 
+        # ── RecursivePlanner: always-on signal-driven pivoting ──
+        # Attaches to the signal bus and can spawn new agents mid-scan
+        # when it detects CVE signatures, trust-state changes, or
+        # high-value tool dependencies.
+        from argus.planning.recursive_planner import RecursivePlanner
+
+        planner = RecursivePlanner(self)
+        await planner.attach_to_scan(
+            scan_id=scan_id,
+            target=target,
+            verdict=verdict_adapter,
+            demo_pace=demo_pace_seconds,
+            intel=intel,
+            timeout=timeout,
+        )
+
+        # Wrap the rest of the scan in try/finally so the planner's
+        # signal-bus handler is always cleaned up — even if the scan
+        # throws an unhandled exception.  Without this, a leaked handler
+        # from a failed scan would fire with stale context on the next
+        # scan, potentially spawning pivot agents for the wrong target.
+        try:
+            return await self._run_scan_body(
+                scan_id=scan_id,
+                result=result,
+                target=target,
+                types_to_deploy=types_to_deploy,
+                timeout=timeout,
+                demo_pace_seconds=demo_pace_seconds,
+                planner=planner,
+                verdict_adapter=verdict_adapter,
+                intel=intel,
+                scan_signal_bus=scan_signal_bus,
+            )
+        finally:
+            # Ensure the planner is fully cleaned up even on failure:
+            # 1. Unsubscribe from signal bus (idempotent — safe if
+            #    collect_pivot_results already called it on the happy path).
+            # 2. Cancel any still-running pivot tasks so they don't keep
+            #    making HTTP requests against the target after the scan
+            #    has failed.
+            # 3. Clear _active_agents to prevent stale entries from
+            #    leaking into subsequent scans on the same Orchestrator.
+            await planner._unsubscribe()
+            for task in planner._running_tasks.values():
+                if not task.done():
+                    task.cancel()
+            if planner._running_tasks:
+                await asyncio.gather(
+                    *planner._running_tasks.values(),
+                    return_exceptions=True,
+                )
+                planner._running_tasks.clear()
+            self._active_agents.clear()
+
+    async def _run_scan_body(
+        self,
+        scan_id: str,
+        result: ScanResult,
+        target: TargetConfig,
+        types_to_deploy: list[AgentType],
+        timeout: float,
+        demo_pace_seconds: float,
+        planner: object,
+        verdict_adapter: object,
+        intel: object,
+        scan_signal_bus: object,
+    ) -> ScanResult:
+        """Inner scan body extracted so _run_scan_locked can wrap it in try/finally."""
+        # ── Autonomous format detection ──
+        # When body_format is "auto" (default), run a lightweight SURVEY
+        # probe to detect whether the target expects JSON or FormData and
+        # which field name carries the prompt.  The detected format is
+        # applied to TargetConfig so ALL agents use it automatically —
+        # no manual --body-format / --prompt-field flags needed.
+        if target.body_format == "auto" and target.agent_endpoint:
+            try:
+                from urllib.parse import urlparse
+
+                from argus.survey import EndpointProber
+
+                parsed = urlparse(target.agent_endpoint)
+                base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+                pre_prober = EndpointProber(
+                    base_url=base_url,
+                    timeout_seconds=min(10.0, timeout / 10.0),
+                    auth_token=target.agent_api_key,
+                )
+                pre_survey = await pre_prober.probe_all()
+                if pre_survey.detected_body_format != "json":
+                    target.body_format = pre_survey.detected_body_format
+                    target.prompt_field = pre_survey.detected_prompt_field
+                    logger.info(
+                        "ARGUS SCAN %s — auto-detected format: %s, field: '%s'",
+                        scan_id[:8],
+                        target.body_format,
+                        target.prompt_field,
+                    )
+                else:
+                    # Explicitly set to json so agents don't re-probe
+                    target.body_format = "json"
+            except Exception as exc:
+                logger.debug(
+                    "Pre-scan format detection failed: %s — defaulting to JSON",
+                    type(exc).__name__,
+                )
+                target.body_format = "json"
+
         # Split agents into Phase 1 (recon) and Phase 2 (attack)
         # Phase 1 agents run first to gather intelligence for Phase 2
         _RECON_AGENTS = {AgentType.MODEL_EXTRACTION}
         phase1_types = [t for t in types_to_deploy if t in _RECON_AGENTS]
         phase2_types = [t for t in types_to_deploy if t not in _RECON_AGENTS]
 
-        def _make_agent(agent_type: AgentType) -> BaseAttackAgent:
-            config = AgentConfig(
+        # Use the promoted instance method for agent creation.
+        # Bind local scan context so callers just pass agent_type.
+        def _make_agent_local(agent_type: AgentType) -> BaseAttackAgent:
+            return self._make_agent(
                 agent_type=agent_type,
                 scan_id=scan_id,
                 target=target,
                 demo_pace_seconds=demo_pace_seconds,
+                verdict_adapter=verdict_adapter,
+                intel=intel,
+                signal_bus=scan_signal_bus,
             )
-            agent_class = self._agent_registry[agent_type]
-            agent = agent_class(config=config, signal_bus=scan_signal_bus)
-            agent.attach_verdict_adapter(verdict_adapter)
-            agent.attach_intel(intel)
-            self._active_agents[config.instance_id] = agent
-            return agent
 
         all_agents: list[BaseAttackAgent] = []
         all_agent_results: list[AgentResult | Exception] = []
@@ -348,7 +485,7 @@ class Orchestrator:
 
         # ── Phase 1: Recon agents (model_extraction) ──
         if phase1_types:
-            phase1_agents = [_make_agent(t) for t in phase1_types]
+            phase1_agents = [_make_agent_local(t) for t in phase1_types]
             all_agents.extend(phase1_agents)
             logger.info(
                 "Phase 1 — Deploying [bold]%d[/] recon agent(s) for intelligence gathering (timeout %.0fs)",
@@ -378,7 +515,7 @@ class Orchestrator:
             phase1_elapsed = (datetime.now(UTC) - scan_start).total_seconds()
             p2_timeout = max(timeout - phase1_elapsed, 0.1)
 
-            phase2_agents = [_make_agent(t) for t in phase2_types]
+            phase2_agents = [_make_agent_local(t) for t in phase2_types]
             all_agents.extend(phase2_agents)
             logger.info(
                 "Phase 2 — Deploying [bold]%d[/] attack agents%s (timeout %.0fs)",
@@ -425,6 +562,16 @@ class Orchestrator:
                 all_findings.extend(all_agents[i].findings)
             else:
                 logger.warning("Unexpected result type from agent %s", all_agents[i].agent_type.value)
+
+        # ── Collect pivot agent results from RecursivePlanner ──
+        pivot_results = await planner.collect_pivot_results()
+        for pr in pivot_results:
+            result.agent_results.append(pr)
+            # Retrieve Finding objects from the agent instance (not from
+            # AgentResult.findings which is list[str] of IDs).
+            pivot_agent = self._active_agents.get(pr.instance_id)
+            if pivot_agent is not None and pivot_agent.findings:
+                all_findings.extend(pivot_agent.findings)
 
         # Validate all findings
         logger.info("Validating %d findings...", len(all_findings))
