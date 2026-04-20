@@ -284,6 +284,10 @@ class ExploitChain:
     entry_point:        str            # "unauthenticated" | "low_priv" | "network"
     combined_score:     float          # max combined_score from component deviations
     owasp_llm_categories: list[str] = field(default_factory=list)
+    
+    # Layer 7 Validation
+    is_validated:       bool = False
+    validation_output:  str = ""
 
 
 @dataclass
@@ -358,6 +362,7 @@ class PipelineRun:
     l3: Optional[L3FuzzResults] = None
     l4: Optional[L4Deviations] = None
     l5: Optional[L5Chains]     = None
+    l7: Optional[Any]          = None # Added later in hierarchy but executed before L6
     l6: Optional[L6Output]     = None
 
     completed_layers: list[int] = field(default_factory=list)

@@ -122,6 +122,75 @@ def _findings_for_file(findings: list[L1Finding], rel_path: str) -> list[str]:
     return [f.id for f in findings if f.file == rel_path]
 
 
+# ── Layer 2 Perimeter-First Doctrine Update ───────────────────────────────────
+
+class PerimeterTaintEngine:
+    """Layer 2 Upgrade: Enforces 'Perimeter-to-Sink' reachability logic."""
+
+    def __init__(self, repo_path: str):
+        self.graph = nx.DiGraph()
+        self.perimeter_types = ["fastapi_route", "cli_arg", "mcp_handshake", "web_socket"]
+        self.sensitive_sinks = [
+            "pickle.load", "cursor.execute", "os.system", "subprocess.run",
+            "eval", "exec", "yaml.load", "session.execute", "agent.run", "crew.kickoff"
+        ]
+
+    def map_reachability(self, findings: list[L1Finding], base_graph: nx.DiGraph) -> list[L1Finding]:
+        """Filters findings to only those reachable from unauthenticated perimeter nodes in the AST graph or those that cross identity boundaries."""
+        valid_findings = []
+        
+        # 1. Identify Perimeter Entry Points (Source Nodes) and Low-Trust Agents
+        unauth_nodes = [n for n in base_graph.nodes() if base_graph.in_degree(n) == 0]
+        identity_nodes = [n for n in base_graph.nodes() if "agent" in str(n).lower() or "user" in str(n).lower()]
+        
+        # Identity Map: Assume explicit high-trust sinks are Database or OS
+        high_trust_tools = ["PostgresLoader", "SQLTool", "OSCommand", "cursor", "db"]
+        
+        # 2. Add structural nodes for findings to the graph if tracking AST logic
+        for finding in findings:
+            is_valid = False
+            # Check if finding inherently describes a sink vulnerability
+            if any(sink in finding.title or sink in finding.description for sink in self.sensitive_sinks):
+                
+                # --- PILLAR 1: Identity-Aware Taint Engine ---
+                # First, check if unauth perimeter reaches the sink.
+                for unauth in unauth_nodes:
+                    try:
+                        target_nodes = [n for n in base_graph.nodes() if finding.file in str(base_graph.nodes[n].get('file', ''))]
+                        for target in target_nodes:
+                            path = nx.shortest_path(base_graph, source=unauth, target=target)
+                            if path:
+                                is_valid = True
+                                break
+                    except (nx.NetworkXNoPath, nx.NodeNotFound):
+                        continue
+                    if is_valid: break
+                
+                # Second, check Identity Authorization Bypass (Low-Trust Agent -> High-Trust Component)
+                if not is_valid:
+                    for identity in identity_nodes:
+                        # Determine if identity context traverses an explicit boundary
+                        try:
+                            target_nodes = [n for n in base_graph.nodes() if any(t_tool.lower() in str(n).lower() for t_tool in high_trust_tools)]
+                            for target in target_nodes:
+                                if nx.has_path(base_graph, source=identity, target=target):
+                                    is_valid = True
+                                    print(f"  [L2-Taint] Authorization Bypass Discovered: Identity {identity} -> High-Trust Sink {target}")
+                                    break
+                        except (nx.NetworkXNoPath, nx.NodeNotFound):
+                            continue
+                        if is_valid: break
+
+            else:
+                # Basic vulnerabilities not sinking to RCE bypass graph check here
+                is_valid = True 
+
+            if is_valid:
+                valid_findings.append(finding)
+                
+        return valid_findings
+
+
 # ── Module A — Schema Injection ───────────────────────────────────────────────
 
 def _run_module_a(
@@ -590,6 +659,14 @@ def run_layer2(
     surface.graph_node_count = n_nodes
     surface.graph_edge_count = n_edges
     print(f"       → {n_nodes} nodes, {n_edges} edges, {len(surface.escalation_paths)} escalation paths")
+
+    # ── Perimeter-First Taint Filter ──────────────────────
+    print("[L2-Taint] Enforcing Perimeter-to-Sink Taint Routing...")
+    taint_engine = PerimeterTaintEngine(repo_dir)
+    valid_findings = taint_engine.map_reachability(all_findings, graph)
+    discarded = len(all_findings) - len(valid_findings)
+    print(f"       → Dropped {discarded} theoretical findings; kept {len(valid_findings)} reachable from perimeter")
+    all_findings = valid_findings
 
     # ── Module C ──────────────────────────────────────────
     print("[L2-C] Deserialization sink cross-file tracer...")

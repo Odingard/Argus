@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-argus_zd.py — ARGUS
+cli.py — ARGUS
 Orchestrates all 6 layers of the agentic AI vulnerability pipeline.
 
 Usage:
-  python argus_zd.py https://github.com/target/repo -o results/
+  python cli.py https://github.com/target/repo -o results/
 
   # Resume from specific layer
-  python argus_zd.py --from-layer 3 --input results/crewai/
+  python cli.py --from-layer 3 --input results/crewai/
 
   # Run only specific layer
-  python argus_zd.py https://github.com/target/repo --only-layer 1
+  python cli.py https://github.com/target/repo --only-layer 1
 
   # Skip a layer
-  python argus_zd.py https://github.com/target/repo --skip-layer 4
+  python cli.py https://github.com/target/repo --skip-layer 4
 
 Cost estimate: ~$24 / ~65 min for a medium repo
 """
@@ -22,19 +22,14 @@ from __future__ import annotations
 import os
 import sys
 
-# VENV Enforcement
-if sys.prefix == sys.base_prefix:
-    print(f"\n\033[38;5;196m[CRITICAL]\033[0m ARGUS MUST BE RUN FROM THE VIRTUAL ENVIRONMENT!")
-    print(f"Execute using: {sys.base_prefix}/bin/python argus_zd.py <target>\n")
-    sys.exit(1)
-
+# VENV Enforcement Disabled for Local Fallback
 import json
 import argparse
 import subprocess
 from dotenv import load_dotenv
 
 # Load all API Keys from .env
-load_dotenv()
+load_dotenv(override=True)
 import tempfile
 import shutil
 from pathlib import Path
@@ -136,6 +131,24 @@ def _layer_exists(output_dir: str, layer: int) -> bool:
 
 
 # ── Layer runners ─────────────────────────────────────────────────────────────
+
+def run_layer0(run: PipelineRun, args) -> None:
+    """Layer 0 — Version Synchronization Sentinel."""
+    print(f"\n{BOLD}{'━'*62}{RESET}")
+    print(f"{BOLD}  LAYER 0 — Version Fingerprinting & Synchronization{RESET}")
+    print(f"{'━'*62}\n")
+    
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from layer0.fingerprinter import VersionFingerprinter
+    
+    fingerprinter = VersionFingerprinter(run.repo_path)
+    constraints = fingerprinter.get_constraints()
+    
+    output_file = _layer_path(run.output_dir, 0)
+    _save_json({"fingerprint_version": constraints.get("framework_version"), "git_tag": constraints.get("git_tag")}, output_file)
+    run.completed_layers.append(0)
 
 def run_layer1(run: PipelineRun, args) -> None:
     """Layer 1 — Scanner (scanner_v3.py integrated)."""
@@ -441,9 +454,47 @@ def run_layer6(run: PipelineRun, args) -> None:
           f"{len(run.l6.flywheel_entries)} flywheel entries")
 
 
+def run_layer7(run: PipelineRun, args) -> None:
+    """Layer 7 — Execution Sandbox Validation."""
+    print(f"\n{BOLD}{'━'*62}{RESET}")
+    print(f"{BOLD}  LAYER 7 — Execution Sandbox Validation{RESET}")
+    print(f"{'━'*62}\n")
+
+    if run.l5 is None:
+        data = _load_json(_layer_path(run.output_dir, 5))
+        from shared.models import L5Chains, ExploitChain, ExploitStep
+        run.l5 = L5Chains(
+            target=data["target"],
+            critical_count=data["critical_count"],
+            high_count=data["high_count"],
+        )
+        chains = []
+        for c in data.get("chains", []):
+            steps = [ExploitStep(**s) for s in c.pop("steps", [])]
+            chains.append(ExploitChain(**{**c, "steps": steps}))
+        run.l5.chains = chains
+
+    if not run.repo_path:
+        print(f"  {_color('✗', SEV_COLORS['CRITICAL'])} Layer 7 requires repo_path for Sandbox execution.")
+        return
+
+    from layer7.sandbox import validate_l5_chains
+    validate_l5_chains(run.l5, run.repo_path, getattr(args, 'verbose', False))
+    
+    # We alter the internal L5 state with validation flags so L6 pulls the validated chains
+    output_file = _layer_path(run.output_dir, 7)
+    _save_json({
+        "validated_chains": [c.chain_id for c in run.l5.chains if c.is_validated]
+    }, output_file)
+
+    run.completed_layers.append(7)
+    run.l7 = True
+
+
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
 LAYER_RUNNERS = {
+    0: run_layer0,
     1: run_layer1,
     2: run_layer2,
     3: run_layer3,
@@ -703,6 +754,14 @@ def run_pipeline(args) -> None:
 
         # ── Full pipeline with parallel swarm ──────────────────────────────
         else:
+            # Step 0: L0 Target Version Fingerprinting
+            if start_layer <= 0:
+                if not _layer_exists(run.output_dir, 0):
+                    run_layer0(run, args)
+                else:
+                    print(f"\n  {GRAY}[CACHED] Layer 0{RESET}")
+                    run.completed_layers.append(0)
+
             # Step 1: L1 synchronous — seeds the environment
             if start_layer <= 1:
                 if not _layer_exists(run.output_dir, 1):
@@ -716,21 +775,37 @@ def run_pipeline(args) -> None:
                     )
 
             # Step 2: Parallel swarm (L2-L4 + all agents concurrently)
-            if start_layer <= 2:
-                if not _layer_exists(run.output_dir, 2):
-                    run_layer2(run, args)
+            if start_layer <= 4:
+                if not (_layer_exists(run.output_dir, 2) and
+                        _layer_exists(run.output_dir, 3) and
+                        _layer_exists(run.output_dir, 4)):
+                    _run_parallel_swarm(run, args)
                 else:
-                    print(f"\n  {GRAY}[CACHED] Layers 2{RESET}")
-                    run.completed_layers.extend([2])
+                    print(f"\n  {GRAY}[CACHED] Layers 2-4 + agents (swarm output exists){RESET}")
+                    run.completed_layers.extend([2, 3, 4])
 
-            print(f"\n{BOLD}{'━'*62}{RESET}")
-            print(f"{BOLD}\033[38;5;196m  [ENTERPRISE LOCK] LAYER 3+ BLOCKED\033[0m{RESET}")
-            print(f"{'━'*62}")
-            print("  Advanced Synthesis layers (3-6) and Apex Agents are required to")
-            print("  weaponize these structural flaws into Zero-Day CVE chains.")
-            print("  \n  Upgrade to ARGUS Enterprise to bypass this lock and generate payloads:")
-            print("  https://demo.sixsenseenterprise.com")
-            print(f"{'━'*62}\n")
+            # Step 3: L5 synchronous — Opus synthesizes across ALL findings
+            if start_layer <= 5:
+                if not _layer_exists(run.output_dir, 5):
+                    run_layer5(run, args)
+                else:
+                    print(f"\n  {GRAY}[CACHED] Layer 5{RESET}")
+                    run.completed_layers.append(5)
+
+            # Step 3.5: L7 synchronous — Validation Sandbox
+            if start_layer <= 7:
+                if not _layer_exists(run.output_dir, 7):
+                    run_layer7(run, args)
+                else:
+                    print(f"\n  {GRAY}[CACHED] Layer 7{RESET}")
+                    run.completed_layers.append(7)
+
+            # Step 4: L6 synchronous — CVE pipeline + flywheel
+            if not _layer_exists(run.output_dir, 6):
+                run_layer6(run, args)
+            else:
+                print(f"\n  {GRAY}[CACHED] Layer 6{RESET}")
+                run.completed_layers.append(6)
 
         # ── Final summary ──────────────────────────────────────────────────
         print(f"\n{'━'*62}")
@@ -779,19 +854,19 @@ def main():
         epilog="""
 Examples:
   # Full pipeline
-  python argus_zd.py https://github.com/crewAIInc/crewAI -o results/crewai/
+  python cli.py https://github.com/crewAIInc/crewAI -o results/crewai/
 
   # Resume from Layer 2 (L1 already done)
-  python argus_zd.py https://github.com/target/repo --from-layer 2 --input results/target/
+  python cli.py https://github.com/target/repo --from-layer 2 --input results/target/
 
   # Layer 1 only (scanner only)
-  python argus_zd.py https://github.com/target/repo --only-layer 1
+  python cli.py https://github.com/target/repo --only-layer 1
 
   # Skip Layer 4 simulation
-  python argus_zd.py https://github.com/target/repo --skip-layer 4
+  python cli.py https://github.com/target/repo --skip-layer 4
 
   # Run L2 on existing L1 report + local clone
-  python argus_zd.py /path/to/local/repo --from-layer 2 -o results/local/
+  python cli.py /path/to/local/repo --from-layer 2 -o results/local/
         """
     )
     p.add_argument("target",

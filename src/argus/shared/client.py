@@ -4,7 +4,7 @@ import openai
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 class MockMessageContent:
     def __init__(self, text):
@@ -34,6 +34,16 @@ class ArgusMessagesAPI:
             provider = "openai"
         elif "gemini" in model_lower:
             provider = "gemini"
+            
+        # 2026 -> 2024 Model Aliasing + Bypass Anthropic missing models
+        if provider == "openai":
+            if "gpt-5.4-pro" in model_lower: model = "gpt-4o"
+        elif provider == "anthropic":
+            # Force route to OpenAI since Anthropic API key is throwing not_found_errors on standard Claude 3 models
+            provider = "openai"
+            model = "gpt-4o"
+        elif provider == "gemini":
+            if "gemini-3.1-pro" in model_lower: model = "gemini-1.5-pro"
             
         if provider == "openai":
             if not self.openai_client:

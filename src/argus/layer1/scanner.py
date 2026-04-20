@@ -21,6 +21,7 @@ Usage:
 """
 
 from shared.client import ArgusClient
+import anthropic
 import subprocess
 import tempfile
 import os
