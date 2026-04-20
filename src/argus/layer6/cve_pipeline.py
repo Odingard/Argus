@@ -27,15 +27,14 @@ from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Optional
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.models import (
+from argus.shared.models import (
     L1Report, L5Chains, L6Output,
     CVEDraft, FlywheelEntry, ExploitChain
 )
-from shared.prompts import L6_MODEL, L6_CVE_DRAFT_PROMPT, L6_ADVISORY_PROMPT
+from argus.shared.prompts import L6_MODEL, L6_CVE_DRAFT_PROMPT, L6_ADVISORY_PROMPT
 
 # ── Config ────────────────────────────────────────────────────────────────────
 DISCLOSURE_DAYS   = 90

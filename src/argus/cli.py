@@ -36,15 +36,13 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import asdict
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
 
 import importlib
 import inspect
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed, Future
 
-from shared.models import PipelineRun, L1Report
+from argus.shared.models import PipelineRun, L1Report
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 SEV_COLORS = {
@@ -62,10 +60,10 @@ BANNER = f"""\033[38;5;196m{BOLD}
 ╔════════════════════════════════════════════════════════════════════════════╗
 ║                                                                            ║
 ║       ___    ____  ________  __  _____                                     ║
-║      /   |  / __ \/ ____/ / / / / ___/                                     ║
-║     / /| | / /_/ / / __/ / / /  \__ \                                      ║
+║      /   |  / __ \\/ ____/ / / / / ___/                                     ║
+║     / /| | / /_/ / / __/ / / /  \\__ \\                                      ║
 ║    / ___ |/ _, _/ /_/ / /_/ /  ___/ /                                      ║
-║   /_/  |_/_/ |_|\____/\____/  /____/                                       ║
+║   /_/  |_/_/ |_|\\____/\\____/  /____/                                       ║
 ║                                                                            ║
 ║   {RESET}\033[38;5;196mAutonomous AI Red Team Platform{BOLD}                                          ║
 ║   {RESET}\033[38;5;203mOdingard Security • Six Sense{BOLD}\033[38;5;196m                                            ║
@@ -138,10 +136,7 @@ def run_layer0(run: PipelineRun, args) -> None:
     print(f"{BOLD}  LAYER 0 — Version Fingerprinting & Synchronization{RESET}")
     print(f"{'━'*62}\n")
     
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from layer0.fingerprinter import VersionFingerprinter
+    from argus.layer0.fingerprinter import VersionFingerprinter
     
     fingerprinter = VersionFingerprinter(run.repo_path)
     constraints = fingerprinter.get_constraints()
@@ -156,7 +151,7 @@ def run_layer1(run: PipelineRun, args) -> None:
     print(f"{BOLD}  LAYER 1 — Discovery & Fingerprinting{RESET}")
     print(f"{'━'*62}\n")
 
-    from layer1.scanner import run_scan as scanner_run_scan
+    from argus.layer1.scanner import run_scan as scanner_run_scan
 
     output_file = _layer_path(run.output_dir, 1)
 
@@ -192,7 +187,7 @@ def run_layer2(run: PipelineRun, args) -> None:
         data = _load_json(_layer_path(run.output_dir, 1))
         run.l1 = L1Report.from_dict(data, repo_path=run.repo_path)
 
-    from layer2.surface_analyzer import run_layer2 as _run_l2
+    from argus.layer2.surface_analyzer import run_layer2 as _run_l2
     run.l2 = _run_l2(run.l1, verbose=args.verbose, output_dir=run.output_dir)
 
     # Serialize L2 to JSON
@@ -234,8 +229,8 @@ def run_layer3(run: PipelineRun, args) -> None:
 
     if run.l2 is None:
         data = _load_json(_layer_path(run.output_dir, 2))
-        from shared.models import L2SurfaceMap, SchemaInjectionPath, EscalationPath
-        from shared.models import DeserChain, MemoryBoundaryGap, AuthGapPath, VulnHypothesis
+        from argus.shared.models import L2SurfaceMap, SchemaInjectionPath, EscalationPath
+        from argus.shared.models import DeserChain, MemoryBoundaryGap, AuthGapPath, VulnHypothesis
         run.l2 = L2SurfaceMap(
             target=data["target"],
             graph_node_count=data.get("graph_nodes", 0),
@@ -248,7 +243,7 @@ def run_layer3(run: PipelineRun, args) -> None:
         run.l2.memory_boundary_gaps = [MemoryBoundaryGap(**g) for g in data.get("memory_boundary_gaps", [])]
         run.l2.auth_gap_paths = [AuthGapPath(**g) for g in data.get("auth_gap_paths", [])]
 
-    from layer3.fuzzer import run_layer3 as _run_l3
+    from argus.layer3.fuzzer import run_layer3 as _run_l3
     run.l3 = _run_l3(run.l2, verbose=args.verbose)
 
     output_file = _layer_path(run.output_dir, 3)
@@ -273,7 +268,7 @@ def run_layer4(run: PipelineRun, args) -> None:
 
     if run.l3 is None:
         data = _load_json(_layer_path(run.output_dir, 3))
-        from shared.models import L3FuzzResults
+        from argus.shared.models import L3FuzzResults
         run.l3 = L3FuzzResults(
             target=data["target"],
             total_payloads=data["total_payloads"],
@@ -284,15 +279,15 @@ def run_layer4(run: PipelineRun, args) -> None:
         )
     if run.l2 is None:
         data = _load_json(_layer_path(run.output_dir, 2))
-        from shared.models import L2SurfaceMap, VulnHypothesis, SchemaInjectionPath
-        from shared.models import EscalationPath, MemoryBoundaryGap
+        from argus.shared.models import L2SurfaceMap, VulnHypothesis, SchemaInjectionPath
+        from argus.shared.models import EscalationPath, MemoryBoundaryGap
         run.l2 = L2SurfaceMap(target=data["target"])
         run.l2.ranked_hypotheses = [VulnHypothesis(**h) for h in data.get("ranked_hypotheses", [])]
         run.l2.schema_injection_paths = [SchemaInjectionPath(**p) for p in data.get("schema_injection_paths", [])]
         run.l2.escalation_paths = [EscalationPath(**p) for p in data.get("escalation_paths", [])]
         run.l2.memory_boundary_gaps = [MemoryBoundaryGap(**g) for g in data.get("memory_boundary_gaps", [])]
 
-    from layer4.deviation_detector import run_layer4 as _run_l4
+    from argus.layer4.deviation_detector import run_layer4 as _run_l4
     run.l4 = _run_l4(run.l3, run.l2, l1_report=run.l1, verbose=args.verbose)
 
     output_file = _layer_path(run.output_dir, 4)
@@ -320,7 +315,7 @@ def run_layer5(run: PipelineRun, args) -> None:
     # Load L4 if not in memory
     if run.l4 is None:
         data = _load_json(_layer_path(run.output_dir, 4))
-        from shared.models import L4Deviations, DeviationPrediction
+        from argus.shared.models import L4Deviations, DeviationPrediction
         run.l4 = L4Deviations(
             target=data["target"],
             high_confidence=data["high_confidence"],
@@ -333,8 +328,8 @@ def run_layer5(run: PipelineRun, args) -> None:
     if run.l2 is None:
         try:
             data = _load_json(_layer_path(run.output_dir, 2))
-            from shared.models import L2SurfaceMap, VulnHypothesis, SchemaInjectionPath
-            from shared.models import EscalationPath, MemoryBoundaryGap
+            from argus.shared.models import L2SurfaceMap, VulnHypothesis, SchemaInjectionPath
+            from argus.shared.models import EscalationPath, MemoryBoundaryGap
             run.l2 = L2SurfaceMap(target=data["target"])
             run.l2.ranked_hypotheses = [VulnHypothesis(**h) for h in data.get("ranked_hypotheses", [])]
             run.l2.schema_injection_paths = [SchemaInjectionPath(**p) for p in data.get("schema_injection_paths", [])]
@@ -342,7 +337,7 @@ def run_layer5(run: PipelineRun, args) -> None:
             run.l2.memory_boundary_gaps = [MemoryBoundaryGap(**g) for g in data.get("memory_boundary_gaps", [])]
         except FileNotFoundError:
             print(f"  {GRAY}[WARNING] layer2.json missing. Using stub L2 Surface Map for L5 synthesis.{RESET}")
-            from shared.models import L2SurfaceMap, SchemaInjectionPath, MemoryBoundaryGap
+            from argus.shared.models import L2SurfaceMap, SchemaInjectionPath, MemoryBoundaryGap
             run.l2 = L2SurfaceMap(target=run.target)
             run.l2.schema_injection_paths = [
                 SchemaInjectionPath(
@@ -366,13 +361,13 @@ def run_layer5(run: PipelineRun, args) -> None:
                 )
             ]
 
-    from layer5.chain_synthesizer import run_layer5 as _run_l5
+    from argus.layer5.chain_synthesizer import run_layer5 as _run_l5
     run.l5 = _run_l5(run.l4, run.l2, l1_report=run.l1, verbose=args.verbose)
 
     if not run.l5.chains:
         if args.verbose:
             print("  [DEBUG] Opus returned 0 chains (likely due to missing L2 graph). Forcing mock fallback for advisory.")
-        from shared.models import ExploitChain, ExploitStep
+        from argus.shared.models import ExploitChain, ExploitStep
         run.l5.chains = [
             ExploitChain(
                 chain_id="CHAIN-LLAMA-0DAY",
@@ -418,7 +413,7 @@ def run_layer6(run: PipelineRun, args) -> None:
     # Load L5 if not in memory
     if run.l5 is None:
         data = _load_json(_layer_path(run.output_dir, 5))
-        from shared.models import L5Chains, ExploitChain, ExploitStep
+        from argus.shared.models import L5Chains, ExploitChain, ExploitStep
         run.l5 = L5Chains(
             target=data["target"],
             critical_count=data["critical_count"],
@@ -430,7 +425,7 @@ def run_layer6(run: PipelineRun, args) -> None:
             chains.append(ExploitChain(**{**c, "steps": steps}))
         run.l5.chains = chains
 
-    from layer6.cve_pipeline import run_layer6 as _run_l6
+    from argus.layer6.cve_pipeline import run_layer6 as _run_l6
     run.l6 = _run_l6(
         run.l5,
         output_dir=run.output_dir,
@@ -462,7 +457,7 @@ def run_layer7(run: PipelineRun, args) -> None:
 
     if run.l5 is None:
         data = _load_json(_layer_path(run.output_dir, 5))
-        from shared.models import L5Chains, ExploitChain, ExploitStep
+        from argus.shared.models import L5Chains, ExploitChain, ExploitStep
         run.l5 = L5Chains(
             target=data["target"],
             critical_count=data["critical_count"],
@@ -478,7 +473,7 @@ def run_layer7(run: PipelineRun, args) -> None:
         print(f"  {_color('✗', SEV_COLORS['CRITICAL'])} Layer 7 requires repo_path for Sandbox execution.")
         return
 
-    from layer7.sandbox import validate_l5_chains
+    from argus.layer7.sandbox import validate_l5_chains
     validate_l5_chains(run.l5, run.repo_path, getattr(args, 'verbose', False))
     
     # We alter the internal L5 state with validation flags so L6 pulls the validated chains
@@ -512,7 +507,7 @@ def _discover_agents() -> list[type]:
     Drop any file containing a BaseAgent subclass into agents/ and it runs.
     No changes to this file required.
     """
-    from agents.base import BaseAgent
+    from argus.agents.base import BaseAgent
     agents_dir = Path(__file__).parent / "agents"
     discovered = []
 
@@ -544,7 +539,7 @@ def _agent_finding_to_deviation(finding) -> object:
     combined_score = 0.95 (high confidence, not 1.0 to keep L5 ranking honest).
     simulation_mode = "agent_static" so L5 knows the provenance.
     """
-    from shared.models import DeviationPrediction
+    from argus.shared.models import DeviationPrediction
     return DeviationPrediction(
         payload_id        = finding.id,
         hypothesis_id     = f"AGENT-{finding.agent_id}",
@@ -673,7 +668,7 @@ def _run_parallel_swarm(run: object, args) -> None:
 
         # Ensure L4 exists (core pipeline may have populated it)
         if run.l4 is None:
-            from shared.models import L4Deviations
+            from argus.shared.models import L4Deviations
             run.l4 = L4Deviations(target=run.target)
 
         agent_deviations = [_agent_finding_to_deviation(f) for f in all_agent_findings]
@@ -768,7 +763,7 @@ def run_pipeline(args) -> None:
                     run_layer1(run, args)
                 else:
                     print(f"\n  {GRAY}[CACHED] Layer 1{RESET}")
-                    from shared.models import L1Report
+                    from argus.shared.models import L1Report
                     run.l1 = L1Report.from_dict(
                         _load_json(_layer_path(run.output_dir, 1)),
                         repo_path=run.repo_path
@@ -896,7 +891,7 @@ Examples:
     args = p.parse_args()
     # Flywheel report mode
     if getattr(args, 'flywheel_report', False):
-        from shared.flywheel_reader import read_flywheel, print_flywheel_report, find_flywheel
+        from argus.shared.flywheel_reader import read_flywheel, print_flywheel_report, find_flywheel
         flywheel_path = find_flywheel(args.output)
         stats = read_flywheel(flywheel_path)
         print_flywheel_report(stats)

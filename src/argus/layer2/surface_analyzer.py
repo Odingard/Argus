@@ -17,22 +17,21 @@ from __future__ import annotations
 import json
 import os
 import hashlib
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 import networkx as nx
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.models import (
+from argus.shared.models import (
     L1Report, L1Finding, L2SurfaceMap,
     SchemaInjectionPath, TrustEdge, EscalationPath,
     DeserChain, MemoryBoundaryGap, AuthGapPath, VulnHypothesis
 )
-from shared.flywheel_reader import FlywheelPriors, generate_priors, find_flywheel, read_flywheel
-from shared.prompts import (
+from argus.shared.flywheel_reader import FlywheelPriors, generate_priors, find_flywheel, read_flywheel
+from argus.shared.prompts import (
     L2_MODEL,
     L2_SCHEMA_INJECTION_PROMPT, L2_TRUST_GRAPH_PROMPT,
     L2_DESER_TRACE_PROMPT, L2_MEMORY_BOUNDARY_PROMPT,

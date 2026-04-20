@@ -16,8 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.base import BaseAgent, AgentFinding
+from argus.agents.base import BaseAgent, AgentFinding
 
 BOLD  = "\033[1m"
 BLUE  = "\033[94m"
@@ -80,11 +79,84 @@ Return JSON only: {{"findings": [{{"severity": "CRITICAL", "title": "title", "de
 
     def _t2_broad_fs_access(self, files: list[str], repo_path: str):
         """Find tools granting agent access outside a filesystem sandbox"""
-        pass
+        fs_patterns = [
+            r'open\(', r'Path\(', r'os\.path', r'shutil\.',
+            r'read_file', r'write_file', r'file_tool',
+        ]
+        sandbox_patterns = [
+            r'sandbox', r'allowed_path', r'chroot', r'restrict',
+            r'whitelist.*path', r'allowlist.*path',
+        ]
+        for fp in files:
+            code = self._read_file_safe(fp)
+            if not code:
+                continue
+            # Must look like a tool definition with file access
+            if not re.search(r'@tool', code, re.IGNORECASE):
+                continue
+            has_fs = any(
+                re.search(p, code, re.IGNORECASE) for p in fs_patterns
+            )
+            if not has_fs:
+                continue
+            has_sandbox = any(
+                re.search(p, code, re.IGNORECASE) for p in sandbox_patterns
+            )
+            if has_sandbox:
+                continue  # has some sandboxing
+            rel = os.path.relpath(fp, repo_path)
+            self._add_finding(AgentFinding(
+                self._fid(rel + "broad_fs_access"),
+                self.AGENT_ID, self.VULN_CLASS, "HIGH",
+                f"Unsandboxed filesystem access in agent tool in {rel}",
+                rel, "EA-T2",
+                "An agent tool performs filesystem operations without path "
+                "restriction or sandboxing. A prompt-injected agent could "
+                "read/write arbitrary files.",
+                "Prompt injection -> tool call -> arbitrary file read/write",
+                None, None, None,
+                "Restrict tool file access to an explicit allowlist of paths "
+                "or a sandboxed directory.",
+            ))
 
     def _t3_mcp_schema(self, files: list[str], repo_path: str):
         """Identify overly broad MCP schemas exposed to manipulation"""
-        pass
+        mcp_patterns = [
+            r'mcp', r'tool_schema', r'function_call', r'tool_definition',
+            r'register_tool', r'add_tool',
+        ]
+        validation_patterns = [
+            r'json_?schema', r'validate', r'pydantic', r'TypedDict',
+            r'required.*param', r'enum\b',
+        ]
+        for fp in files:
+            code = self._read_file_safe(fp)
+            if not code:
+                continue
+            has_mcp = any(
+                re.search(p, code, re.IGNORECASE) for p in mcp_patterns
+            )
+            if not has_mcp:
+                continue
+            has_validation = any(
+                re.search(p, code, re.IGNORECASE) for p in validation_patterns
+            )
+            if has_validation:
+                continue
+            rel = os.path.relpath(fp, repo_path)
+            self._add_finding(AgentFinding(
+                self._fid(rel + "mcp_schema_broad"),
+                self.AGENT_ID, self.VULN_CLASS, "MEDIUM",
+                f"Overly broad MCP/tool schema without validation in {rel}",
+                rel, "EA-T3",
+                "Tool or MCP schema accepts arbitrary parameters without type "
+                "validation or enum constraints. An attacker could manipulate "
+                "tool parameters via prompt injection.",
+                "Inject unexpected parameter values via crafted prompts",
+                None, None, None,
+                "Add JSON Schema validation, Pydantic models, or enum "
+                "constraints to all tool parameter definitions.",
+            ))
 
 if __name__ == "__main__":
     import argparse

@@ -22,16 +22,15 @@ from pathlib import Path
 from dataclasses import asdict
 from typing import Optional
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.models import (
+from argus.shared.models import (
     L1Report, L2SurfaceMap, L3FuzzResults,
     FuzzPayload, VulnHypothesis,
     SchemaInjectionPath, EscalationPath, MemoryBoundaryGap
 )
-from shared.prompts import (
+from argus.shared.prompts import (
     L3_MODEL,
     L3_SCHEMA_FUZZER_PROMPT,
     L3_CHAIN_FUZZER_PROMPT,

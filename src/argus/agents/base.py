@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 from abc import ABC, abstractmethod
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 
 # ── Shared finding format (compatible with L1Report findings) ─────────────────
 

@@ -20,7 +20,7 @@ Usage:
   python scanner.py <github_url> --skip-chains
 """
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 import anthropic
 import subprocess
 import tempfile
@@ -81,7 +81,7 @@ def c(color: str, text: str) -> str:
 # Cost comparison on 2000-file repo:
 #   Single Opus  : ~$100    Full Haiku+Opus : ~$10
 #   Analysis only: ~$6      PoC generation  : ~$4
-from shared.prompts import L2_MODEL as ANALYSIS_MODEL, L5_MODEL as POC_MODEL
+from argus.shared.prompts import L2_MODEL as ANALYSIS_MODEL, L5_MODEL as POC_MODEL
 PARALLEL_WORKERS = 4    # concurrent file analysis threads — tune for your machine
                         # M1 Pro: 4-5 is optimal. Raise if API rate limits allow.
 
