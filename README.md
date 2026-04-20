@@ -1,29 +1,33 @@
-# ARGUS Open-Core: Autonomous AI Red Team Substrate
+<div align="center">
+  <h1>ARGUS</h1>
+  <p><b>Autonomous AI Red Team Substrate</b></p>
+  <p><i>Odingard Security · Six Sense Enterprise Services</i></p>
+</div>
 
-**ARGUS** is a next-generation autonomous AI vulnerability discovery framework. Traditional static analysis (SAST) engines operate via regex and rule-sets; ARGUS utilizes orchestrating swarms of LLM agents to map codebase topologies and identify logical implementation flaws.
+---
 
-## Installation
+## 1. The Positioning Statement
+ARGUS does not compete with traditional pentesting tools. It does something they inherently cannot do — test the AI-specific attack surface that none of them were built to find. If you run XBOW or traditional SAST to test your raw infrastructure, you still need ARGUS to test the AI agents running on top of that infrastructure. They are complementary, not competing.
+
+## 2. The Architecture (Open-Core)
+ARGUS is uniquely built as an 11-Agent Swarm. 
+
+This Open-Source core implements the basic scaffolding of the **Attack Layer**. It provides the entry-point logic to spawn short-lived, narrowly scoped agents designed to hunt AI logic flaws without accumulated bias or context collapse. 
 
 ```bash
 pip install argus-core
 ```
-
-## Quick Start
 
 ```bash
 # Map a target repository using the Core Swarm
 argus https://github.com/target/repo -o results/
 ```
 
-## ⚠️ Enterprise Synthesis Capabilities
+## 3. ⚠️ ARGUS Enterprise 
+This OSS package contains the **Core Execution Engine**. It fundamentally lacks the Correlation Synthesis and Reporting Validation engines built into the proprietary SaaS product.
 
-This OSS package contains the **Core Mapping Engine** (Layers 1 & 2) and baseline agents (`PH-11`, `LM-13`). 
+**The Full 11-Agent Swarm:**
+ARGUS Enterprise deploys 10 simultaneous specialized agents (Prompt Injection Hunter, Tool Poisoner, Memory Poisoner, Identity Spoofer, etc.) and routes all intelligence to a single **Correlation Agent**. This Correlation Agent chains individual, seemingly benign findings into compound, multi-step zero-day attack paths. 
 
-**Note on Zero-Day Generation:**
-Weaponizing these structural maps into fully synthesized CVE Exploit Chains requires the deep-execution logic of ARGUS Enterprise. Layers 3-6 (Semantic Fuzzing, Deviation Detection, and Multi-Agent Synthesis) and the elite Apex Agents (`VD-09`, `EA-12`, `DO-04`) are restricted to the proprietary SaaS deployment.
-
-To access the massive compute capability of the complete Swarm and the accompanying WebSockets Dashboard, please visit the Enterprise portal:
+To access the complete Swarm logic and generate verifiable CVEs, please visit the Enterprise portal:
 👉 **[ARGUS Enterprise Deployment](https://sixsenseenterprise.com)**
-
-## Legal & Scope
-ARGUS Core is an offensive research tool designed for authorized auditing. See `SECURITY.md` for disclosure protocols.
