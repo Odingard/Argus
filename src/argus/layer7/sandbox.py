@@ -13,7 +13,7 @@ import subprocess
 import shutil
 from pathlib import Path
 
-from shared.models import L5Chains, ExploitChain
+from argus.shared.models import L5Chains, ExploitChain
 
 # Time allowed for an exploit to prove itself before we kill it
 VALIDATION_TIMEOUT_SECONDS = 15

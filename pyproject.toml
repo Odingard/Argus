@@ -22,4 +22,4 @@ authors = [
 ]
 
 [project.scripts]
-argus = "argus.cli:run_pipeline"
+argus = "argus.cli:main"

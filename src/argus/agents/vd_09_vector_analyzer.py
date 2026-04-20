@@ -16,8 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.base import BaseAgent, AgentFinding
+from argus.agents.base import BaseAgent, AgentFinding
 
 BOLD  = "\033[1m"
 BLUE  = "\033[94m"
@@ -101,7 +100,42 @@ Return JSON: {{"findings": [{{"severity": "HIGH", "title": "title", "description
 
     def _t3_vector_metadata_filter(self, files: list[str], repo_path: str):
         """Identify improper sanitization in vector metadata filters"""
-        pass # Simplified for performance
+        filter_patterns = [
+            r'metadata_filter', r'where\s*=', r'filter\s*=',
+            r'\.query\(.*filter', r'search.*metadata',
+        ]
+        sanitize_patterns = [
+            r'sanitiz', r'escap', r'parameteriz', r'validate.*filter',
+        ]
+        for fp in files:
+            code = self._read_file_safe(fp)
+            if not code:
+                continue
+            has_filter = any(
+                re.search(p, code, re.IGNORECASE) for p in filter_patterns
+            )
+            if not has_filter:
+                continue
+            has_sanitize = any(
+                re.search(p, code, re.IGNORECASE) for p in sanitize_patterns
+            )
+            if has_sanitize:
+                continue
+            rel = os.path.relpath(fp, repo_path)
+            self._add_finding(AgentFinding(
+                self._fid(rel + "vector_metadata_filter"),
+                self.AGENT_ID, self.VULN_CLASS, "MEDIUM",
+                f"Unsanitized vector metadata filter in {rel}",
+                rel, "VD-T3",
+                "Vector database metadata filters accept user-controlled input "
+                "without sanitization. An attacker could manipulate filter "
+                "expressions to access unauthorized documents or bypass "
+                "tenant isolation.",
+                "Inject malicious metadata filter to bypass access controls",
+                None, None, None,
+                "Validate and sanitize all metadata filter inputs. Use "
+                "parameterized queries or an allowlist of filter fields.",
+            ))
 
 if __name__ == "__main__":
     import argparse

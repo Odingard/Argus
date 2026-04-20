@@ -23,16 +23,15 @@ from dataclasses import asdict
 from typing import Optional
 from itertools import combinations
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.models import (
+from argus.shared.models import (
     L4Deviations, L2SurfaceMap, L1Report,
     L5Chains, ExploitChain, ExploitStep,
     DeviationPrediction
 )
-from shared.prompts import L5_MODEL, L5_CHAIN_SYNTHESIS_PROMPT
+from argus.shared.prompts import L5_MODEL, L5_CHAIN_SYNTHESIS_PROMPT
 
 # ── Config ────────────────────────────────────────────────────────────────────
 HIGH_CONFIDENCE_THRESHOLD = 0.70     # only these pass to synthesis

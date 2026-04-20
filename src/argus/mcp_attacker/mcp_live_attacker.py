@@ -47,7 +47,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Optional, Any
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 
 # MCP SDK imports
 from mcp import ClientSession
@@ -55,8 +55,7 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.types import Tool, Resource, Prompt
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from shared.prompts import HAIKU_MODEL, OPUS_MODEL
+from argus.shared.prompts import HAIKU_MODEL, OPUS_MODEL
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BANNER = """

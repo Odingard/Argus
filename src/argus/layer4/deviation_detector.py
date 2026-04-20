@@ -27,15 +27,13 @@ from pathlib import Path
 from dataclasses import asdict
 from typing import Optional
 
-from shared.client import ArgusClient
+from argus.shared.client import ArgusClient
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from shared.models import (
+from argus.shared.models import (
     L1Report, L2SurfaceMap, L3FuzzResults,
     L4Deviations, DeviationPrediction, FuzzPayload
 )
-from shared.prompts import L4_MODEL, L4_DEVIATION_PREDICTION_PROMPT
+from argus.shared.prompts import L4_MODEL, L4_DEVIATION_PREDICTION_PROMPT
 
 # ── Config ────────────────────────────────────────────────────────────────────
 HIGH_CONFIDENCE_THRESHOLD   = 0.70   # combined_score to pass to L5
@@ -154,7 +152,10 @@ def _get_code_context(
 
 # ── Layer 4 Live Harness Update ──────────────────────────────────────────────
 
-import docker
+try:
+    import docker
+except ImportError:
+    docker = None  # type: ignore[assignment]
 import requests
 import time
 import json

@@ -16,8 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.base import BaseAgent, AgentFinding
+from argus.agents.base import BaseAgent, AgentFinding
 
 BOLD  = "\033[1m"
 BLUE  = "\033[94m"
@@ -81,11 +80,78 @@ Return JSON only: {{"findings": [{{"severity": "HIGH", "title": "title", "descri
 
     def _t2_unbounded_context(self, files: list[str], repo_path: str):
         """Agent memory arrays without token truncation limits"""
-        pass
+        context_patterns = [
+            r'message_history', r'chat_history', r'conversation_memory',
+            r'context_window', r'\.append\(.*message', r'messages\.append',
+        ]
+        truncation_patterns = [
+            r'max_tokens', r'truncat', r'trim', r'limit.*len',
+            r'\[:.*\]',  # slice notation suggesting truncation
+        ]
+        for fp in files:
+            code = self._read_file_safe(fp)
+            if not code:
+                continue
+            has_context = any(
+                re.search(p, code, re.IGNORECASE) for p in context_patterns
+            )
+            if not has_context:
+                continue
+            has_truncation = any(
+                re.search(p, code, re.IGNORECASE) for p in truncation_patterns
+            )
+            if has_truncation:
+                continue  # properly bounded
+            rel = os.path.relpath(fp, repo_path)
+            self._add_finding(AgentFinding(
+                self._fid(rel + "unbounded_context"),
+                self.AGENT_ID, self.VULN_CLASS, "HIGH",
+                f"Unbounded context growth in {rel}",
+                rel, "DO-T2",
+                "Message/context array grows without truncation or token limit. "
+                "An attacker can exhaust memory/tokens by sending many messages.",
+                "Send large volume of messages to exhaust context budget",
+                None, None, None,
+                "Add max_tokens or max_turns limit; truncate oldest messages.",
+            ))
 
     def _t3_recursive_tool(self, files: list[str], repo_path: str):
         """Tools designed to trigger immediate re-execution infinitely"""
-        pass
+        recursive_patterns = [
+            r'@tool[\s\S]{0,200}def \w+[\s\S]{0,500}(run_agent|execute|invoke)',
+            r'tool_call[\s\S]{0,300}tool_call',
+            r'while\s+True[\s\S]{0,300}(tool|agent|execute)',
+        ]
+        guard_patterns = [
+            r'max_iter', r'max_recursi', r'depth.*limit', r'recursion_limit',
+        ]
+        for fp in files:
+            code = self._read_file_safe(fp)
+            if not code:
+                continue
+            has_recursive = any(
+                re.search(p, code, re.IGNORECASE | re.DOTALL)
+                for p in recursive_patterns
+            )
+            if not has_recursive:
+                continue
+            has_guard = any(
+                re.search(p, code, re.IGNORECASE) for p in guard_patterns
+            )
+            if has_guard:
+                continue
+            rel = os.path.relpath(fp, repo_path)
+            self._add_finding(AgentFinding(
+                self._fid(rel + "recursive_tool"),
+                self.AGENT_ID, self.VULN_CLASS, "HIGH",
+                f"Recursive tool call without depth guard in {rel}",
+                rel, "DO-T3",
+                "A tool invocation can trigger agent re-execution without a "
+                "recursion depth or iteration limit, enabling infinite loops.",
+                "Trigger tool that re-invokes agent execution repeatedly",
+                None, None, None,
+                "Add max_iterations or recursion_limit guard before tool dispatch.",
+            ))
 
 if __name__ == "__main__":
     import argparse

@@ -29,8 +29,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.base import BaseAgent, AgentFinding
+from argus.agents.base import BaseAgent, AgentFinding
 
 BOLD  = "\033[1m"
 BLUE  = "\033[94m"
