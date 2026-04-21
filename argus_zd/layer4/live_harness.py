@@ -26,9 +26,31 @@ class _MockContainer:
         return b"INFO: argus-sandbox container initialized...\nINFO: running AddressSanitizer: SEGV (simulated)\n"
 
 class LiveHarness:
+    def __init__(self):
+        try:
+            import docker
+            self.client = docker.from_env()
+        except Exception as e:
+            print(f"[LAYER 4] Could not connect to Docker Daemon: {e}")
+            self.client = None
+
     def setup_container(self, target_path: str):
-        print(f"[LAYER 4] LiveHarness: Staging Docker container for {target_path}...")
-        return _MockContainer()
+        if not self.client:
+            print("[LAYER 4] Using Mock Container Engine (Docker unavailable).")
+            return _MockContainer()
+            
+        print(f"[LAYER 4] LiveHarness: Staging REAL Docker Engine for {target_path}...")
+        image_tag = "argus-zd-target:latest"
+        try:
+            import docker
+            print(f"     -> Building target container image...")
+            # Some repos might not have a Dockerfile, which throws BuildError
+            image, build_logs = self.client.images.build(path=target_path, tag=image_tag, rm=True)
+            print(f"     -> Running target container...")
+            return self.client.containers.run(image_tag, detach=True)
+        except Exception as e:
+            print(f"[LAYER 4] Docker Build Failed (Ensure {target_path} has a Dockerfile). Falling back to Mock. Error: {e}")
+            return _MockContainer()
 
     def generate_artifact_package(self, container, oob_status: bool) -> VerificationArtifactPackage:
         """Compiles evidence for the disclosure advisory."""
