@@ -68,6 +68,14 @@ class BaseAgent(ABC):
     VULN_CLASS:  str = ""
     TECHNIQUES:  list[str] = []
 
+    # MAAC — Mythos-Aligned Attack Chain (Truong, 2026). Phase numbers:
+    #   1 Reconnaissance         2 Prompt-Layer Access   3 Model-Layer Manipulation
+    #   4 Memory Corruption      5 Tool Misuse           6 Orchestration Drift
+    #   7 Multi-Agent Escalation 8 Environment Pivoting  9 Impact
+    # Each agent declares the phase(s) it covers so the CLI can report
+    # per-run MAAC coverage and the benchmark layer can attribute chains.
+    MAAC_PHASES: list[int] = []
+
     def __init__(self, verbose: bool = False):
         self.verbose   = verbose
         self.client    = ArgusClient()

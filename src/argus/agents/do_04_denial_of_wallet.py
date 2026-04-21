@@ -29,6 +29,7 @@ class DenialOfWalletAgent(BaseAgent):
     AGENT_NAME = "Denial of Wallet Trapper"
     VULN_CLASS = "UNBOUNDED_CONSUMPTION"
     TECHNIQUES = ["DO-T1", "DO-T2", "DO-T3"]
+    MAAC_PHASES = [9]  # Impact (cost exhaustion)
 
     # Basic trigger keywords
     LOOP_PATTERNS = [

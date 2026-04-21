@@ -41,6 +41,7 @@ class PersonaHijackingAgent(BaseAgent):
     AGENT_NAME = "Persona Hijacking Agent"
     VULN_CLASS = "MESH_TRUST"
     TECHNIQUES = ["PH-T1", "PH-T2", "PH-T3", "PH-T4", "PH-T5"]
+    MAAC_PHASES = [2, 3]  # Prompt-Layer Access + Model-Layer Manipulation
 
     # Role definition patterns — where agent identity is established
     ROLE_DEFINITION_PATTERNS = [

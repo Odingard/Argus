@@ -43,6 +43,7 @@ class ModelExtractionAgent(BaseAgent):
     AGENT_NAME = "Model Extraction Agent"
     VULN_CLASS = "MODEL_EXTRACTION"
     TECHNIQUES = ["ME-T1", "ME-T2", "ME-T3", "ME-T4", "ME-T5", "ME-T6"]
+    MAAC_PHASES = [1, 3]  # Reconnaissance + Model-Layer Manipulation
 
     # Patterns indicating embedded system prompts
     SYSTEM_PROMPT_PATTERNS = [

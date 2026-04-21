@@ -577,7 +577,16 @@ def _run_parallel_swarm(run: object, args) -> None:
     print(f"{'━'*62}")
     print(f"  Thread 1 : Core pipeline (L2 → L3 → L4)")
     for ac in agent_classes:
-        print(f"  Thread   : {ac.AGENT_ID} — {ac.AGENT_NAME}")
+        phases = getattr(ac, "MAAC_PHASES", []) or []
+        phase_str = f"  MAAC {'+'.join(str(p) for p in phases)}" if phases else "  MAAC —"
+        print(f"  Thread   : {ac.AGENT_ID} — {ac.AGENT_NAME}{phase_str}")
+
+    # MAAC coverage across the swarm
+    covered = sorted({p for ac in agent_classes for p in getattr(ac, "MAAC_PHASES", []) or []})
+    missing = [p for p in range(1, 10) if p not in covered]
+    print(f"\n  MAAC coverage: phases {covered or '—'}")
+    if missing:
+        print(f"  {GRAY}MAAC gaps    : phases {missing} (no agent currently covers){RESET}")
     print()
 
     all_agent_findings: list = []

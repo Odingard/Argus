@@ -29,6 +29,7 @@ class VectorPoisoningAgent(BaseAgent):
     AGENT_NAME = "Vector Intelligence Agent"
     VULN_CLASS = "RAG_POISONING"
     TECHNIQUES = ["VD-T1", "VD-T2", "VD-T3"]
+    MAAC_PHASES = [4]  # Memory Corruption (RAG / vector-store poisoning)
 
     # Patterns looking for vector DB usage or retrieval
     RAG_RETRIEVE_PATTERNS = [

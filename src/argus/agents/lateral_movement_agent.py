@@ -40,6 +40,7 @@ class LateralMovementAgent(BaseAgent):
     AGENT_NAME = "Lateral Movement Agent"
     VULN_CLASS = "TRACE_LATERAL"
     TECHNIQUES = ["LM-T1", "LM-T2", "LM-T3", "LM-T4", "LM-T5"]
+    MAAC_PHASES = [7, 8]  # Multi-Agent Escalation + Environment Pivoting
 
     # Tool-to-tool data flow patterns — output of one tool becomes input of another
     TOOL_CHAIN_PATTERNS = [

@@ -42,6 +42,7 @@ class RaceConditionAgent(BaseAgent):
     AGENT_NAME = "Race Condition Agent"
     VULN_CLASS = "RACE_CONDITION"
     TECHNIQUES = ["RC-T1", "RC-T2", "RC-T3", "RC-T4", "RC-T5"]
+    MAAC_PHASES = [5]  # Tool Misuse (race in tool invocation path)
 
     # Code patterns that indicate race condition vulnerability
     SHARED_STATE_PATTERNS = [
