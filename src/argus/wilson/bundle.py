@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import os
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,10 +14,18 @@ from typing import Optional
 
 from argus.shared.ars import score_chain, band
 from argus.shared.models import ExploitChain
+from argus.wilson.keys import (
+    load_key as _load_key,
+    key_fingerprint as _key_fingerprint,
+    is_default_key as _is_default_key,
+)
 
 
-# HMAC key for bundle integrity. Real customer-facing builds must rotate
-# this per-engagement; the default is fine for local validation runs.
+# HMAC key fallback for tests that don't set an env var. Real customer-
+# facing builds resolve through argus.wilson.keys.load_key() which
+# prefers ARGUS_WILSON_KEY / ARGUS_WILSON_KEYFILE / ~/.argus/wilson.key
+# over this default. Warns loudly if the default is actually used to
+# sign a bundle.
 _DEFAULT_KEY = b"argus-wilson-default-key-rotate-per-engagement"
 
 
@@ -129,7 +136,11 @@ def build_bundle_for_chain(
     (out_root / "README.md").write_text(readme, encoding="utf-8")
 
     # manifest.json
-    key = hmac_key or os.environ.get("ARGUS_WILSON_KEY", "").encode() or _DEFAULT_KEY
+    key = hmac_key or _load_key()
+    if _is_default_key(key):
+        print("  [wilson] WARNING: signing with the built-in default key. "
+              "Rotate via `python -c \"from argus.wilson.keys import "
+              "rotate_key; print(rotate_key())\"` before customer delivery.")
     files = sorted(p.name for p in out_root.iterdir()
                    if p.is_file() and p.name != "manifest.json")
     manifest = {
@@ -137,6 +148,7 @@ def build_bundle_for_chain(
         "generated_at":    datetime.utcnow().isoformat(),
         "files":           {},
         "hmac_algorithm":  "HMAC-SHA256",
+        "key_fingerprint": _key_fingerprint(key),
     }
     for name in files:
         manifest["files"][name] = _sha256_file(out_root / name)
@@ -172,7 +184,7 @@ def verify_bundle(
         actual = _sha256_file(bundle_dir / name)
         if actual != expected:
             return False, f"sha256 mismatch on {name}"
-    key = hmac_key or os.environ.get("ARGUS_WILSON_KEY", "").encode() or _DEFAULT_KEY
+    key = hmac_key or _load_key()
     canonical = json.dumps(manifest.get("files", {}), sort_keys=True).encode()
     expected_hmac = hmac.new(key, canonical, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_hmac, manifest.get("hmac", "")):

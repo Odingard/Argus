@@ -42,6 +42,38 @@ def _has_evidence(output: str) -> bool:
     return any(p.search(output) for p in _EVIDENCE_PATTERNS)
 
 
+def _summarize_network(output: str) -> str:
+    """
+    Best-effort extract of network activity from PoC stdout/stderr. We
+    can't sniff the network on a --rm container after it exits, but most
+    non-trivial network attempts leave tell-tale strings in the Python
+    stack: 'getaddrinfo failed', 'ConnectionRefusedError', URL strings,
+    etc. This gives the Wilson bundle something forensic to show even
+    when full packet capture isn't available.
+    """
+    if not output:
+        return "no output captured"
+    hits: list[str] = []
+    net_markers = [
+        r"getaddrinfo", r"ConnectionRefused", r"ConnectionReset",
+        r"https?://[\w\.\-:/]+",
+        r"SSLError", r"CertificateError",
+        r"socket\.",
+    ]
+    for pat in net_markers:
+        for m in re.finditer(pat, output):
+            snippet = output[max(0, m.start() - 20):m.end() + 40]
+            hits.append(snippet.replace("\n", " "))
+            if len(hits) >= 4:
+                break
+        if len(hits) >= 4:
+            break
+    if not hits:
+        return ("no network-indicator strings in output (consistent with "
+                "a host-only or network-none run)")
+    return " | ".join(hits[:4])
+
+
 async def _validate_chain_via_docker(chain: ExploitChain, repo_path: str) -> tuple[bool, str]:
     if not chain.poc_code:
         return False, "No PoC code available for validation."
@@ -112,14 +144,21 @@ async def _validate_chain_via_docker(chain: ExploitChain, repo_path: str) -> tup
                 if process.returncode != 0:
                     return False, f"Crash/Error (Code {process.returncode}):\n{output}"
 
+                # Light network-trace summary so the Wilson bundle has a
+                # forensic record of what talked to whom. We can't inspect
+                # outbound traffic post-hoc on a --rm container, but we
+                # surface any obvious network-error / hostname traces the
+                # PoC itself emitted; and we tag whether the run had net on.
+                net_summary = _summarize_network(output)
+
                 if _has_evidence(output):
-                    return True, output
+                    return True, output + "\n\n[net] " + net_summary
 
                 return False, (
                     "Exit code 0 but no exploit evidence in output. "
                     "PoC must emit an ARGUS_POC_LANDED:<id> marker or leak "
                     "recognisable sensitive data to be considered validated.\n"
-                    f"Output:\n{output}"
+                    f"Output:\n{output}\n\n[net] {net_summary}"
                 )
 
             except asyncio.TimeoutError:
