@@ -20,7 +20,6 @@ import os
 import re
 import tempfile
 import asyncio
-from pathlib import Path
 
 from argus.shared.models import L5Chains, ExploitChain
 
@@ -61,15 +60,29 @@ async def _validate_chain_via_docker(chain: ExploitChain, repo_path: str) -> tup
         with open(poc_path, "w") as f:
             f.write(payload.strip())
 
+        # Copy the (read-only mounted) target into a writable path inside the
+        # container, then `pip install -e .` if it's a Python package so the
+        # PoC can import the REAL library (e.g. `from crewai.xxx import ...`).
+        # Fall back to PYTHONPATH manipulation for loose source trees.
+        install_script = (
+            "set -e; "
+            "cp -r /src /target; "
+            "cd /target; "
+            "pip install -q requests websocket-client aiohttp 2>/dev/null || true; "
+            "if [ -f pyproject.toml ] || [ -f setup.py ]; then "
+            "  pip install -q -e . 2>/dev/null "
+            "  || pip install -q . 2>/dev/null "
+            "  || true; "
+            "fi; "
+            "export PYTHONPATH=/target:/target/src:${PYTHONPATH}; "
+            "python /poc/poc.py"
+        )
         cmd = [
             "docker", "run", "--rm",
-            "-v", f"{os.path.abspath(repo_path)}:/target:ro",
+            "-v", f"{os.path.abspath(repo_path)}:/src:ro",
             "-v", f"{poc_path}:/poc/poc.py:ro",
-            "-w", "/target",
-            "-e", "PYTHONPATH=/target:/target/src",
             "python:3.10-slim",
-            "bash", "-c",
-            "pip install -q requests websocket-client aiohttp && python /poc/poc.py",
+            "bash", "-c", install_script,
         ]
 
         try:

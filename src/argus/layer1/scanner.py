@@ -267,8 +267,28 @@ No preamble, explanation, or markdown around the JSON.\
 """
 
 
+# ── PoC reproducibility contract ──────────────────────────────────────────────
+# Every PoC we emit must be reproducible against the SHIPPING library, not a
+# stub recreation of it. Triagers reject "theoretical" PoCs that redefine the
+# vulnerable class inside the PoC itself (we learned this the hard way: 22
+# CRITICAL findings closed as "not reproducible" on 2026-04-20).
+#
+# Contract, enforced in every prompt below:
+#   1. Import the real vulnerable symbol from its real module path derived
+#      from the file path — e.g. src/crewai/agents/base.py →
+#      `from crewai.agents.base import ...`. NEVER redeclare the class.
+#   2. Exercise the real vulnerable code path with attacker input.
+#   3. Print `ARGUS_POC_LANDED:<title-slug>` on successful exploitation so
+#      the L7 sandbox can confirm reproducibility automatically.
+#   4. Non-destructive — use file markers like /tmp/argus_poc_<slug> or
+#      stdout, never `rm`, network exfil to real hosts, or DB writes.
+#   5. Must `sys.exit(1)` if the vulnerable path was not reached, so
+#      import errors, renamed symbols, or patched versions fail loudly.
+
 POC_PROMPT_STANDARD = """\
-You are a security researcher generating proof-of-concept code for responsible disclosure.
+You are a security researcher generating a REPRODUCIBLE proof-of-concept for
+responsible disclosure. Triagers reject theoretical PoCs; yours must exploit
+the REAL shipping library, not a stub recreation of it.
 
 Vulnerability Title: {title}
 Class:               {vuln_class}
@@ -282,28 +302,38 @@ Vulnerable Code:
 {code_snippet}
 ```
 
-Generate a minimal working PoC. Requirements:
-- Minimum code to prove exploitability
-- Clear inline comments on each step
-- Shows attacker-controlled behavior or output
-- Self-contained: mock imports if full package unavailable
-- Suitable for a responsible disclosure advisory
-- STRICT RULE: PoC must be non-destructive. Do not delete data, cause DoS, or permanently alter systems. Use benign verification markers.
+HARD REQUIREMENTS (rejecting any PoC that violates these):
+1. Import the vulnerable symbol from its REAL module path. Derive the
+   import from the file path: a file `src/<pkg>/<...>/<mod>.py` becomes
+   `from <pkg>.<...>.<mod> import <Symbol>`. NEVER redefine the class
+   inside the PoC. If the import would fail, the finding is bogus — say so
+   instead of stubbing.
+2. Call the REAL vulnerable function with attacker-controlled input.
+3. On successful exploitation print exactly this marker on its own line:
+       ARGUS_POC_LANDED:{title_slug}
+   Use a filesystem side-effect as evidence (e.g. write a marker file to
+   /tmp/argus_poc_{title_slug} then read it back and print the marker).
+4. If the vulnerable path was NOT reached (ImportError, AttributeError,
+   patched version, guard clause rejected input), call sys.exit(1) with
+   the reason. Silent success on a patched library is worse than a crash.
+5. Non-destructive. No rm, no network traffic to real hosts, no DB writes.
+   Only the /tmp marker and stdout.
 
 Return ONLY valid JSON with no markdown fences:
 {{
   "poc_code":        "complete PoC as a single string, \\n for newlines",
-  "poc_explanation": "what the PoC demonstrates and what the attacker gains",
+  "poc_explanation": "what code path runs, what evidence proves it, what attacker gains",
   "cvss_estimate":   "score (severity) — CVSS vector string and brief justification",
   "remediation":     "specific actionable fix for this vulnerability"
 }}\
 """
 
 
-# Fix 6: TRUST_ESCALATION-specific prompt
+# Fix 6: TRUST_ESCALATION-specific prompt — same reproducibility contract.
 POC_PROMPT_TRUST = """\
-You are a security researcher generating proof-of-concept code for responsible disclosure.
-This finding involves TRUST_ESCALATION in an agentic AI system.
+You are a security researcher generating a REPRODUCIBLE proof-of-concept for
+a TRUST_ESCALATION finding in an agentic AI system. Triagers reject
+theoretical PoCs; yours must exploit the REAL shipping library.
 
 Vulnerability Title: {title}
 File:                {file}
@@ -316,18 +346,27 @@ Vulnerable Code:
 {code_snippet}
 ```
 
-Generate a PoC demonstrating the trust escalation. Key requirements:
-- Show how attacker-controlled input reaches privileged execution without an authorization gate
-- Demonstrate the missing control between LLM output and tool invocation
-- If multi-turn: show injection message → resulting tool call → execution → attacker gain
-- Mock the LLM call if needed — the execution path is what matters, not the LLM response
-- Show exactly what the attacker gains
-- STRICT RULE: PoC must be non-destructive. Do not delete data, cause DoS, or permanently alter systems. Use benign verification markers.
+HARD REQUIREMENTS (rejecting any PoC that violates these):
+1. Import the real agent / orchestrator / tool classes from their real
+   module paths. NEVER recreate them inside the PoC.
+2. It is OK to stub the LLM response (a fixed string is fine) because the
+   vulnerability is in the ROUTING of that string into privileged
+   execution, not in the LLM itself. But the routing code must be the
+   shipping library's code, not your recreation of it.
+3. Show: attacker input → library's own dispatch path → privileged call
+   with attacker-controlled argument. Print exactly this marker on its
+   own line on success:
+       ARGUS_POC_LANDED:{title_slug}
+4. Use a /tmp/argus_poc_{title_slug} filesystem marker as evidence.
+5. If the escalation path doesn't reach the privileged sink
+   (authorization gate exists, input validated, dispatch refused),
+   sys.exit(1) with the reason. Never stub past a guard.
+6. Non-destructive — no rm, no real network, no DB writes.
 
 Return ONLY valid JSON with no markdown fences:
 {{
   "poc_code":        "complete PoC as a single string, \\n for newlines",
-  "poc_explanation": "step-by-step: attacker input → LLM emission → what executes → attacker gain",
+  "poc_explanation": "step-by-step: attacker input → library dispatch → privileged sink → attacker gain",
   "cvss_estimate":   "score (severity) — CVSS vector and justification, note scope if agents cross boundaries",
   "remediation":     "where to add the authorization gate, what to validate, how to constrain execution"
 }}\
@@ -518,8 +557,15 @@ def analyze_file(filepath: str, repo_dir: str, client: ArgusClient, verbose: boo
     return out
 
 
+def _title_slug(title: str) -> str:
+    """Stable ASCII slug used in ARGUS_POC_LANDED markers."""
+    import re as _re
+    slug = _re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
+    return (slug[:48] or "finding")
+
+
 def generate_poc(finding: Finding, client: ArgusClient, verbose: bool = False) -> Finding:
-    """Fix 1 + 6 + 7."""
+    """Fix 1 + 6 + 7 + real-library reproducibility."""
     TRIDENT_VULN_CLASSES = {"TRUST_ESCALATION", "MESH_TRUST", "PHANTOM_MEMORY", "TRACE_LATERAL"}
     prompt = (
         POC_PROMPT_TRUST if finding.vuln_class in TRIDENT_VULN_CLASSES
@@ -529,6 +575,7 @@ def generate_poc(finding: Finding, client: ArgusClient, verbose: bool = False) -
         file=finding.file, line_hint=finding.line_hint,
         description=finding.description, attack_vector=finding.attack_vector,
         code_snippet=finding.code_snippet,
+        title_slug=_title_slug(finding.title),
     )
 
     resp = None
