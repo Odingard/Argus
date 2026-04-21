@@ -77,8 +77,19 @@ async def _validate_chain_via_docker(chain: ExploitChain, repo_path: str) -> tup
             "export PYTHONPATH=/target:/target/src:${PYTHONPATH}; "
             "python /poc/poc.py"
         )
+        # Sandbox hardening: drop Linux capabilities, block privilege
+        # escalation, cap process count and memory. A malicious PoC
+        # (hallucinated by Opus, or a supply-chain payload in a scanned
+        # repo) should not be able to break out of the container or DoS
+        # the host. Network is left on because `pip install -e .` needs
+        # PyPI; a fully offline two-stage build is the follow-up.
         cmd = [
             "docker", "run", "--rm",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            "--pids-limit=128",
+            "--memory=512m",
+            "--memory-swap=512m",
             "-v", f"{os.path.abspath(repo_path)}:/src:ro",
             "-v", f"{poc_path}:/poc/poc.py:ro",
             "python:3.10-slim",

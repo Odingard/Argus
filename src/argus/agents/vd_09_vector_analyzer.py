@@ -11,10 +11,9 @@ Techniques (3):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
-import sys
-from pathlib import Path
 
 from argus.agents.base import BaseAgent, AgentFinding
 
@@ -55,7 +54,7 @@ class VectorPoisoningAgent(BaseAgent):
             fn(files, repo_path)
 
         self.save_history(target, output_dir)
-        out = self.save_findings(output_dir)
+        self.save_findings(output_dir)
         print(f"\n  {BOLD}{self.AGENT_ID} complete{RESET} — {len(self.findings)} findings")
         return self.findings
 
@@ -78,7 +77,9 @@ Identify if retrieved documents are passed directly into an LLM context without 
 Return JSON only: {{"findings": [{{"severity": "HIGH", "title": "title", "description": "desc", "remediation": "fix"}}]}}""")
                 for f in data.get("findings", []):
                     self._add_finding(AgentFinding(self._fid(rel+f["title"]), self.AGENT_ID, self.VULN_CLASS, f["severity"], f["title"], rel, "VD-T1", f["description"], "Poison vector DB -> retrieve -> injection", None, None, None, f.get("remediation")))
-            except: pass
+            except (json.JSONDecodeError, KeyError, Exception) as e:
+                if self.verbose:
+                    print(f"  [VD-T1] {rel}: {type(e).__name__}: {e}")
 
     def _t2_embedding_poisoning(self, files: list[str], repo_path: str):
         """Find unrestricted write access to vector databases"""
@@ -97,7 +98,9 @@ Does this code allow untrusted users to insert documents into the vector datasto
 Return JSON: {{"findings": [{{"severity": "HIGH", "title": "title", "description": "desc", "remediation": "fix"}}]}}""")
                 for f in data.get("findings", []):
                     self._add_finding(AgentFinding(self._fid(rel+f["title"]), self.AGENT_ID, self.VULN_CLASS, f["severity"], f["title"], rel, "VD-T2", f["description"], "Untrusted write -> permanent poisoning", None, None, None, f.get("remediation")))
-            except: pass
+            except (json.JSONDecodeError, KeyError, Exception) as e:
+                if self.verbose:
+                    print(f"  [VD-T2] {rel}: {type(e).__name__}: {e}")
 
     def _t3_vector_metadata_filter(self, files: list[str], repo_path: str):
         """Identify improper sanitization in vector metadata filters"""

@@ -714,25 +714,56 @@ def _print_summary(report: MCPAttackReport) -> None:
 
 # ── Transport runners ─────────────────────────────────────────────────────────
 
+# Overall attack wall-clock cap — a hung server should never stall the CLI.
+# Individual MCP protocol calls inherit this envelope.
+ATTACK_WALLCLOCK_TIMEOUT_SECS = 300  # 5 min
+
+
 async def _run_sse(args) -> MCPAttackReport:
     """Run against HTTP SSE endpoint."""
     headers = {}
     if args.token:
         headers["Authorization"] = args.token
 
-    async with sse_client(args.target, headers=headers) as (read, write):
-        async with ClientSession(read, write) as session:
-            return await _run_pipeline(session, args)
+    try:
+        async with asyncio.timeout(ATTACK_WALLCLOCK_TIMEOUT_SECS):
+            async with sse_client(args.target, headers=headers) as (read, write):
+                async with ClientSession(read, write) as session:
+                    return await _run_pipeline(session, args)
+    except asyncio.TimeoutError:
+        print(f"\n{RED}[!] SSE attack exceeded "
+              f"{ATTACK_WALLCLOCK_TIMEOUT_SECS}s wallclock; aborting.{RESET}")
+        return MCPAttackReport(
+            target=args.target, transport=args.transport,
+            scan_date=datetime.now().isoformat(), server_profile=None,
+        )
 
 
 async def _run_stdio(args) -> MCPAttackReport:
-    """Run against local stdio MCP server."""
+    """Run against local stdio MCP server.
+
+    Wall-clock timeout protects against a server that never answers or
+    hangs mid-stream — stdio_client otherwise would block indefinitely.
+    Tune via ``ARGUS_MCP_STDIO_TIMEOUT`` (seconds).
+    """
     cmd_parts = args.server_cmd
     params = StdioServerParameters(command=cmd_parts[0], args=cmd_parts[1:])
+    timeout_s = float(
+        os.environ.get("ARGUS_MCP_STDIO_TIMEOUT", str(ATTACK_WALLCLOCK_TIMEOUT_SECS))
+    )
 
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            return await _run_pipeline(session, args)
+    try:
+        async with asyncio.timeout(timeout_s):
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    return await _run_pipeline(session, args)
+    except asyncio.TimeoutError:
+        print(f"\n{RED}[!] stdio attack exceeded {timeout_s}s wallclock; "
+              f"aborting (server unresponsive or hung).{RESET}")
+        return MCPAttackReport(
+            target="stdio", transport="stdio",
+            scan_date=datetime.now().isoformat(), server_profile=None,
+        )
 
 
 async def _run_pipeline(session: ClientSession, args) -> MCPAttackReport:

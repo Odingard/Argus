@@ -16,10 +16,18 @@ Chains are synthesized across deviation clusters — not just per-finding.
 from __future__ import annotations
 
 import json
+import os
 import hashlib
 from typing import Optional
 
 from argus.shared.client import ArgusClient
+
+
+# OOBSynthesizer generates working out-of-band RCE callbacks (pickle,
+# PostgreSQL COPY TO PROGRAM). This is real weaponization — gated behind
+# ARGUS_ENTERPRISE so the open-source / community edition ships benign
+# /tmp marker PoCs only.
+OOB_ENABLED = os.environ.get("ARGUS_ENTERPRISE", "").lower() in ("1", "true", "yes")
 
 
 from argus.shared.models import (
@@ -61,28 +69,42 @@ def _strip_fences(raw: str) -> str:
 
 def _call_opus(client: ArgusClient, prompt: str,
                max_tokens: int = 6000) -> dict:
-    """Opus call — used only for final synthesis."""
+    """Opus call — used only for final synthesis.
+
+    Fails closed on truncation / malformed JSON: we return an empty
+    ``{"chains": []}`` rather than attempting fragile string surgery on
+    partial JSON. Returning empty is strictly better than emitting a
+    fabricated chain.
+    """
     resp = client.messages.create(
         model=L5_MODEL,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}]
     )
-    raw = resp.content[0].text.strip()
+    raw = _strip_fences(resp.content[0].text.strip())
 
-    # Truncation recovery
-    if resp.stop_reason == "max_tokens" or not raw.endswith("}"):
-        last = raw.rfind("},\n    {")
-        if last == -1:
-            last = raw.rfind("}")
-        if last > 0:
-            raw = raw[:last + 1].rstrip(",").rstrip()
-            if not raw.endswith("]"):
-                raw += "\n  ]\n}"
-            else:
-                raw += "\n}"
-
-    raw = _strip_fences(raw)
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Best-effort recovery: try to locate the last complete chain
+        # object and close the outer structure. If that still doesn't
+        # parse cleanly, give up honestly.
+        truncated = False
+        if resp.stop_reason == "max_tokens" or not raw.endswith("}"):
+            truncated = True
+            last = raw.rfind("},")
+            if last == -1:
+                last = raw.rfind("}")
+            if last > 0:
+                candidate = raw[:last + 1].rstrip(", \n\t") + "\n]\n}"
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+        print(f"    [L5] Opus response unparseable "
+              f"(truncated={truncated}, stop_reason={resp.stop_reason}); "
+              "returning empty chain list — better than fabricating.")
+        return {"chains": []}
 
 
 def _chain_id(deviation_ids: list[str]) -> str:
@@ -289,10 +311,15 @@ def _synthesize_cluster(
             component_ids = c.get("component_deviations", [d.payload_id for d in cluster])
             blast = _blast_from_impacts([d.impact for d in cluster])
             
-            # --- OOB Synthesizer Injection ---
+            # --- OOB Synthesizer Injection (Enterprise only) ---
+            # Without ARGUS_ENTERPRISE=1 the PoC stays with its benign
+            # /tmp/argus_poc_<slug> marker. Enterprise mode swaps in a
+            # real out-of-band callback (curl to argus-callback.io).
             raw_poc = c.get("poc_code", "")
             sink_hints = " ".join([d.deviation_type for d in cluster]).lower() + raw_poc.lower()
-            if raw_poc and ("rce" in sink_hints or "pickle" in sink_hints or "exec" in sink_hints or "sql" in sink_hints):
+            if (OOB_ENABLED and raw_poc and
+                    ("rce" in sink_hints or "pickle" in sink_hints
+                     or "exec" in sink_hints or "sql" in sink_hints)):
                 poc_code = oob_synth.synthesize_rce(sink_hints, raw_poc)
             else:
                 poc_code = raw_poc

@@ -172,15 +172,32 @@ class VerificationArtifactPackage:
     oob_callback_confirmed: bool
 
 class LiveHarness:
-    """Layer 4 Upgrade: Automates live verification in ephemeral containers."""
+    """Layer 4 Upgrade: Automates live verification in ephemeral containers.
+
+    Endpoint and port are configurable via env vars so the harness works
+    against any target, not just the one that happens to listen on
+    localhost:8000 /api/v1/agent/restore:
+
+      ARGUS_L4_HARNESS_PORT      (default: 8000)
+      ARGUS_L4_HARNESS_ENDPOINT  (default: /api/v1/agent/restore)
+    """
 
     def __init__(self, repo_path: str):
-        try:
-            self.client = docker.from_env()
-        except:
+        if docker is None:
             self.client = None
+        else:
+            try:
+                self.client = docker.from_env()
+            except docker.errors.DockerException as e:
+                print(f"[LiveHarness] Docker unavailable ({e}); "
+                      "static simulation only.")
+                self.client = None
         self.repo_path = repo_path
         self.image_tag = "argus-verify-target"
+        self.port = int(os.environ.get("ARGUS_L4_HARNESS_PORT", "8000"))
+        self.endpoint_default = os.environ.get(
+            "ARGUS_L4_HARNESS_ENDPOINT", "/api/v1/agent/restore"
+        )
 
     def generate_artifact_package(self, container, oob_status: bool) -> VerificationArtifactPackage:
         """Compiles evidence for the disclosure advisory."""
@@ -210,10 +227,18 @@ class LiveHarness:
         print(json.dumps(asdict(package), indent=2))
         return package
 
-    def verify_exploit(self, payload: str, endpoint: str = "/api/v1/agent/restore") -> tuple[int, dict]:
-        """Spins up target, fires payload, and generates Verification Artifact Package."""
-        artifact_pkg = {}
-        
+    def verify_exploit(self, payload: str, endpoint: Optional[str] = None) -> tuple[int, dict]:
+        """Spins up target, fires payload, and generates Verification Artifact Package.
+
+        Confirmation policy: only a 2xx response counts as exploit
+        confirmation. A 500 means the target crashed — which could be the
+        exploit, OR could be an unrelated bug in the sandbox. We refuse
+        to claim validation on ambiguous evidence; 500 is returned so the
+        caller can flag it for human review but NOT as isConfirmed.
+        """
+        artifact_pkg: dict = {}
+        endpoint = endpoint or self.endpoint_default
+
         if not self.client:
             print("[LiveHarness] Docker daemon unavailable. Skipping live test.")
             return -1, artifact_pkg
@@ -224,34 +249,46 @@ class LiveHarness:
         except docker.errors.BuildError as e:
             print(f"[LiveHarness] Docker build failed: {e}")
             return -1, artifact_pkg
-        
+
         print("[LiveHarness] Running volatile container...")
         container = self.client.containers.run(
-            self.image_tag, detach=True, ports={'8000/tcp': 8000}
+            self.image_tag, detach=True,
+            ports={f'{self.port}/tcp': self.port},
         )
-        
+
         try:
             time.sleep(5)  # Let application spin up
-            
-            print(f"[LiveHarness] Firing payload to http://localhost:8000{endpoint}")
 
-            response = requests.post(f"http://localhost:8000{endpoint}", json={"input": payload}, timeout=5)
+            target_url = f"http://localhost:{self.port}{endpoint}"
+            print(f"[LiveHarness] Firing payload to {target_url}")
+
+            response = requests.post(target_url, json={"input": payload}, timeout=5)
             status = response.status_code
             print(f"[LiveHarness] Target returned HTTP {status}")
-            
-            isConfirmed = (status == 200 or status == 500)
+
+            # Only 2xx counts as confirmation. 500 is ambiguous (could be
+            # the exploit or an unrelated crash); we record it but do not
+            # promote it to isConfirmed.
+            isConfirmed = 200 <= status < 300
             pkg = self.generate_artifact_package(container, isConfirmed)
             artifact_pkg = asdict(pkg)
-            
+
             return status, artifact_pkg
-        except Exception as e:
-            print(f"[LiveHarness] Payload execution error: {e}")
-            artifact_pkg["agent_logs"] = f"Crash Trace: {e}"
+        except requests.RequestException as e:
+            print(f"[LiveHarness] Request error: {e}")
+            artifact_pkg["agent_logs"] = f"Request error: {e}"
+            return -1, artifact_pkg
+        except docker.errors.APIError as e:
+            print(f"[LiveHarness] Docker API error: {e}")
+            artifact_pkg["agent_logs"] = f"Docker API error: {e}"
             return -1, artifact_pkg
         finally:
             print("[LiveHarness] Tearing down container...")
-            container.stop(timeout=2)
-            container.remove(force=True)
+            try:
+                container.stop(timeout=2)
+                container.remove(force=True)
+            except docker.errors.APIError as e:
+                print(f"[LiveHarness] Cleanup error (non-fatal): {e}")
 
 # ── Static Simulation (Mode A) ────────────────────────────────────────────────
 

@@ -11,10 +11,9 @@ Techniques (3):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
-import sys
-from pathlib import Path
 
 from argus.agents.base import BaseAgent, AgentFinding
 
@@ -54,7 +53,7 @@ class DenialOfWalletAgent(BaseAgent):
             fn(files, repo_path)
 
         self.save_history(target, output_dir)
-        out = self.save_findings(output_dir)
+        self.save_findings(output_dir)
         print(f"\n  {BOLD}{self.AGENT_ID} complete{RESET} — {len(self.findings)} findings")
         return self.findings
 
@@ -77,7 +76,9 @@ Does this code allow an agent to continuously delegate back to another agent wit
 Return JSON only: {{"findings": [{{"severity": "HIGH", "title": "title", "description": "desc", "remediation": "fix"}}]}}""")
                 for f in data.get("findings", []):
                     self._add_finding(AgentFinding(self._fid(rel+f["title"]), self.AGENT_ID, self.VULN_CLASS, f["severity"], f["title"], rel, "DO-T1", f["description"], "Trigger endless conversational delegation", None, None, None, f.get("remediation")))
-            except: pass
+            except (json.JSONDecodeError, KeyError, Exception) as e:
+                if self.verbose:
+                    print(f"  [DO-T1] {rel}: {type(e).__name__}: {e}")
 
     def _t2_unbounded_context(self, files: list[str], repo_path: str):
         """Agent memory arrays without token truncation limits"""

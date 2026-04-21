@@ -11,6 +11,7 @@ Techniques (3):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 
@@ -74,7 +75,9 @@ Does this code expose an agent tool that allows LLMs to execute raw OS commands 
 Return JSON only: {{"findings": [{{"severity": "CRITICAL", "title": "title", "description": "desc", "remediation": "fix"}}]}}""")
                 for f in data.get("findings", []):
                     self._add_finding(AgentFinding(self._fid(rel+f["title"]), self.AGENT_ID, self.VULN_CLASS, f["severity"], f["title"], rel, "EA-T1", f["description"], "Prompt injection -> tool call -> RCE", None, None, None, f.get("remediation")))
-            except: pass
+            except (json.JSONDecodeError, KeyError, Exception) as e:
+                if self.verbose:
+                    print(f"  [EA-T1] {rel}: {type(e).__name__}: {e}")
 
     def _t2_broad_fs_access(self, files: list[str], repo_path: str):
         """Find tools granting agent access outside a filesystem sandbox"""
