@@ -25,12 +25,46 @@ After 100 scans: proprietary zero-day discovery intelligence
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+
+# ── Client DNA + semantic fingerprints ────────────────────────────────────────
+# These close out Pillar 2 items that weren't in the original reader:
+#   - Per-client Operational DNA via ARGUS_CLIENT_ID namespacing
+#   - N-gram dedup so the same finding across multiple scans doesn't
+#     inflate the effectiveness stats
+
+def current_client_id() -> str:
+    """Operator-chosen client namespace. 'default' if unset."""
+    return (os.environ.get("ARGUS_CLIENT_ID") or "default").strip() or "default"
+
+
+def semantic_fingerprint(
+    *,
+    vuln_classes:     list[str],
+    attack_patterns:  list[str],
+    chain_pattern:    str,
+    framework_type:   str,
+) -> str:
+    """
+    Stable short hash of the *shape* of a finding. Two entries with the
+    same vuln classes + attack patterns + chain shape + framework type
+    collide in fingerprint. Used by read_flywheel() to collapse
+    cross-scan dupes before they inflate priors.
+    """
+    tokens: list[str] = []
+    tokens.extend(sorted(v.lower().strip() for v in vuln_classes if v))
+    tokens.extend(sorted(a.lower().strip() for a in attack_patterns if a))
+    tokens.append((chain_pattern or "").lower().strip())
+    tokens.append((framework_type or "").lower().strip())
+    joined = "|".join(tokens)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
 
 
 # ── Data Models ───────────────────────────────────────────────────────────────
@@ -92,26 +126,61 @@ class FlywheelStats:
 
 # ── Reader ────────────────────────────────────────────────────────────────────
 
-def read_flywheel(flywheel_path: str) -> FlywheelStats:
+def read_flywheel(
+    flywheel_path: str,
+    client_id:     Optional[str] = None,
+    dedup:         bool = True,
+) -> FlywheelStats:
     """
     Load and aggregate all flywheel entries into FlywheelStats.
-    Returns empty stats if file doesn't exist (cold start).
+
+    - Returns empty stats if the file doesn't exist (cold start).
+    - If ``client_id`` is given, only entries matching that client_id
+      are aggregated (Operational DNA segmentation).
+    - If ``dedup`` is True, entries with duplicate
+      ``semantic_fingerprint`` are collapsed so one chain repeated
+      across scans doesn't compound into inflated priors.
     """
     stats = FlywheelStats()
 
     if not os.path.exists(flywheel_path):
         return stats  # cold start — no history
 
-    entries = []
+    raw_entries: list[dict] = []
     with open(flywheel_path) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             try:
-                entries.append(json.loads(line))
+                raw_entries.append(json.loads(line))
             except json.JSONDecodeError:
                 continue
+
+    if not raw_entries:
+        return stats
+
+    # Filter by client namespace if requested.
+    if client_id:
+        raw_entries = [
+            e for e in raw_entries
+            if (e.get("client_id") or "default") == client_id
+        ]
+
+    # Semantic dedup — keep the most recent occurrence of each fingerprint.
+    if dedup:
+        by_fp: dict[str, dict] = {}
+        for e in raw_entries:
+            fp = e.get("semantic_fingerprint") or ""
+            if not fp:
+                # Legacy entries without fingerprint — keep all.
+                by_fp[f"legacy-{id(e)}"] = e
+            else:
+                # Replace prior occurrence so we use the latest scan_date.
+                by_fp[fp] = e
+        entries = list(by_fp.values())
+    else:
+        entries = raw_entries
 
     if not entries:
         return stats

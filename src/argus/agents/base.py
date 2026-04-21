@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -172,6 +172,29 @@ class BaseAgent(ABC):
         except Exception:
             return None
 
+    # ── Agent-level prior bias (Pillar 2) ──────────────────────────────────
+    # Swarm runtime monkey-patches `get_priority_hints` on instantiated
+    # agents so their `_discover_files` returns blackboard-hot files first.
+    # Stand-alone runs (no swarm) yield the default empty list and fall
+    # back to alphabetic order — same as before the swarm ever existed.
+    def get_priority_hints(self) -> list[tuple[str, float]]:
+        """Return list of (path_substring, weight) hints. Default: none."""
+        return []
+
+    def _sort_files_by_priors(self, files: list[str]) -> list[str]:
+        hints = self.get_priority_hints() or []
+        if not hints:
+            return files
+
+        def score(fp: str) -> float:
+            best = 0.0
+            for needle, weight in hints:
+                if needle and needle in fp and weight > best:
+                    best = weight
+            return best
+
+        return sorted(files, key=lambda fp: (-score(fp), fp))
+
     def _discover_files(self, repo_dir: str, ext: set = None) -> list[str]:
         if ext is None:
             ext = {".py", ".js", ".ts", ".go", ".rs", ".java"}
@@ -185,7 +208,8 @@ class BaseAgent(ABC):
                     fp = os.path.join(root, name)
                     if 50 < os.path.getsize(fp) < max_bytes:
                         files.append(fp)
-        return sorted(files)
+        # Alphabetic default, re-sorted by priors when swarm is active.
+        return self._sort_files_by_priors(sorted(files))
 
     def _print_header(self, target: str) -> None:
         print(f"\n\033[1m{'━'*62}\033[0m")

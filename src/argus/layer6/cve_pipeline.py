@@ -349,6 +349,10 @@ def _append_flywheel(
             f"via {chain.entry_point} entry"
         )
 
+        from argus.shared.flywheel_reader import (
+            semantic_fingerprint as _semfp, current_client_id,
+        )
+
         entry = FlywheelEntry(
             vuln_classes=vuln_classes,
             attack_patterns=attack_patterns,
@@ -357,7 +361,14 @@ def _append_flywheel(
             blast_radius=chain.blast_radius,
             entry_point_type=chain.entry_point,
             framework_type=framework_type,
-            scan_date=discovery_date
+            scan_date=discovery_date,
+            client_id=current_client_id(),
+            semantic_fingerprint=_semfp(
+                vuln_classes=vuln_classes,
+                attack_patterns=attack_patterns,
+                chain_pattern=chain_pattern,
+                framework_type=framework_type,
+            ),
         )
         entries.append(entry)
 

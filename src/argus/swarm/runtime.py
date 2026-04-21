@@ -82,9 +82,11 @@ _SEVERITY_WEIGHT = {"CRITICAL": 1.0, "HIGH": 0.8, "MEDIUM": 0.5, "LOW": 0.3}
 
 def _instrument_agent(agent: BaseAgent, blackboard: Blackboard) -> None:
     """
-    Monkeypatch the agent's `_add_finding` so every finding also lands on
-    the blackboard the moment it's produced. Keeps per-agent code changes
-    to zero.
+    Monkeypatch the agent's ``_add_finding`` so every finding also lands
+    on the blackboard the moment it's produced, and its
+    ``get_priority_hints`` so the agent re-sorts discovered files by the
+    blackboard's current hot-file pheromone weights. Keeps per-agent
+    code changes to zero.
     """
     original = agent._add_finding
 
@@ -99,6 +101,12 @@ def _instrument_agent(agent: BaseAgent, blackboard: Blackboard) -> None:
         )
 
     agent._add_finding = wrapped  # type: ignore[method-assign]
+
+    def priority_hints() -> list[tuple[str, float]]:
+        # Snapshot current hot files with decayed weights.
+        return [(hf.path, hf.weight) for hf in blackboard.hot_files(limit=50)]
+
+    agent.get_priority_hints = priority_hints  # type: ignore[method-assign]
 
 
 # ── Swarm runtime ─────────────────────────────────────────────────────────────

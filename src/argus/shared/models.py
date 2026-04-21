@@ -323,7 +323,12 @@ class CVEDraft:
 class FlywheelEntry:
     """
     Anonymized pattern entry for the intelligence flywheel.
-    NO client/target identifying information stored.
+
+    We keep NO target-identifying text. We DO carry an opaque
+    ``client_id`` (operator-chosen, default "default") so priors can
+    be segmented per engagement — the per-client Operational DNA play.
+    ``semantic_fingerprint`` is an n-gram hash used for dedup across
+    scans so repeated findings don't inflate prior weights artificially.
     """
     vuln_classes:       list[str]
     attack_patterns:    list[str]
@@ -333,6 +338,8 @@ class FlywheelEntry:
     entry_point_type:   str
     framework_type:     str           # "mcp_server" | "orchestration" | "vector_db" | "rag"
     scan_date:          str
+    client_id:          str = "default"
+    semantic_fingerprint: str = ""    # n-gram hash for dedup
 
 
 @dataclass
