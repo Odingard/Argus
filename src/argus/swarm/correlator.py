@@ -33,14 +33,13 @@ import json
 import os
 import threading
 import time
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import Optional
 
 from argus.agents.base import AgentFinding, BaseAgent
 from argus.shared.client import ArgusClient
 from argus.shared.prompts import HAIKU_MODEL, OPUS_MODEL
-from argus.swarm.blackboard import Blackboard, ChainHypothesis, _Event
+from argus.swarm.blackboard import Blackboard, ChainHypothesis
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -92,12 +91,16 @@ class LiveCorrelator:
         agent_registry: dict[str, type[BaseAgent]],
         stop_event: threading.Event,
         verbose: bool = False,
+        priors: Optional[object] = None,
     ) -> None:
         self.bb           = blackboard
         self.registry     = agent_registry
         self.stop_event   = stop_event
         self.verbose      = verbose
         self.client       = ArgusClient()
+        # FlywheelPriors or None. When present, Haiku/Opus prompts get a
+        # short prior summary and confidence floors rise for boosted classes.
+        self.priors       = priors
 
         self._seen: list[_SeenFinding] = []
         self._lock  = threading.Lock()
@@ -108,6 +111,13 @@ class LiveCorrelator:
         # Track clusters we've already asked Haiku about so we don't burn
         # budget on duplicates.
         self._evaluated_clusters: set[str] = set()
+
+    def _prior_summary(self) -> str:
+        """Short textual prior fed into Haiku/Opus prompts. Empty on cold start."""
+        if not self.priors:
+            return ""
+        s = getattr(self.priors, "prior_summary", "") or ""
+        return s[:500]  # hard cap — priors must not bloat correlator prompts
 
     # ── Thread entry point ────────────────────────────────────────────────
 
@@ -244,6 +254,9 @@ class LiveCorrelator:
             f"  {f.description[:200]}"
             for f in cluster
         )
+        prior_block = self._prior_summary()
+        prior_clause = (f"\n\nHISTORICAL PRIORS (bias toward these but do not "
+                        f"fabricate evidence):\n{prior_block}\n") if prior_block else ""
         prompt = (
             "You are a senior red-team correlator. Given these findings "
             "from different offensive agents, decide whether they COMPOSE "
@@ -253,7 +266,8 @@ class LiveCorrelator:
             "Return JSON ONLY:\n"
             '{"chains": [{"title": "...", "rationale": "...", '
             '"confidence": 0.0-1.0}]}\n'
-            "If they do not chain, return {\"chains\": []}.\n\n"
+            "If they do not chain, return {\"chains\": []}."
+            f"{prior_clause}\n"
             f"FINDINGS:\n{summary}"
         )
         try:

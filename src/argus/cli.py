@@ -480,12 +480,30 @@ def run_layer7(run: PipelineRun, args) -> None:
 
     from argus.layer7.sandbox import validate_l5_chains
     validate_l5_chains(run.l5, run.repo_path, getattr(args, 'verbose', False))
-    
+
     # We alter the internal L5 state with validation flags so L6 pulls the validated chains
     output_file = _layer_path(run.output_dir, 7)
     _save_json({
         "validated_chains": [c.chain_id for c in run.l5.chains if c.is_validated]
     }, output_file)
+
+    # Auto-build a Wilson-Proof forensic bundle for every validated chain.
+    # This is the kinetic-verification pillar: a signed, hashed, repro-able
+    # artifact package per chain so triage officers can't dismiss findings
+    # as "theoretical".
+    try:
+        from argus.wilson.bundle import build_bundle_for_chain
+        built = 0
+        for c in run.l5.chains:
+            if not c.is_validated:
+                continue
+            bundle = build_bundle_for_chain(c, run.output_dir)
+            built += 1
+            print(f"  {_color('✓', BOLD)} Wilson bundle  → {bundle.bundle_dir}")
+        if built == 0:
+            print(f"  {GRAY}[wilson] no validated chains → no bundles built{RESET}")
+    except Exception as e:
+        print(f"  {GRAY}[wilson] bundle build failed: {e}{RESET}")
 
     run.completed_layers.append(7)
     run.l7 = True

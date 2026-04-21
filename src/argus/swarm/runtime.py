@@ -22,7 +22,6 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, Future, as_completed
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional
 
 from argus.agents.base import AgentFinding, BaseAgent
 from argus.swarm.blackboard import Blackboard
@@ -30,6 +29,31 @@ from argus.swarm.correlator import LiveCorrelator
 
 
 # ── Agent discovery ───────────────────────────────────────────────────────────
+
+def _load_flywheel_priors(target: str, output_dir: str, verbose: bool = False):
+    """
+    Close the Raptor recursive-feedback cycle: read flywheel.jsonl
+    accumulated from prior scans and derive priors for this target's
+    framework. Returns FlywheelPriors (may be empty on cold start) or
+    None if the reader fails for any reason.
+    """
+    try:
+        from argus.shared.flywheel_reader import (
+            find_flywheel, read_flywheel, generate_priors,
+        )
+        from argus.layer6.cve_pipeline import _detect_framework_type
+    except ImportError:
+        return None
+    try:
+        path = find_flywheel(output_dir)
+        stats = read_flywheel(path)
+        fw_type = _detect_framework_type(target)
+        return generate_priors(stats, fw_type, verbose=verbose)
+    except Exception as e:
+        if verbose:
+            print(f"  [swarm] flywheel prior load failed: {e}")
+        return None
+
 
 def discover_agents() -> dict[str, type[BaseAgent]]:
     """Same loader the classic swarm uses, but keyed by AGENT_ID."""
@@ -103,9 +127,28 @@ def run_swarm(
     registry    = discover_agents()
     stop_event  = threading.Event()
 
+    # Close the Raptor recursive-feedback cycle: load flywheel priors for
+    # this target's framework type and use them to bias the correlator.
+    # Cold start (no flywheel yet) returns empty priors that have no effect.
+    priors = _load_flywheel_priors(target, output_dir, verbose=verbose)
+    if priors and getattr(priors, "total_scans", 0):
+        blackboard.annotate_finding(
+            finding_id="run_priors",
+            key="flywheel_priors",
+            value={
+                "total_scans": priors.total_scans,
+                "boosted":     list(getattr(priors, "boosted_classes", []) or []),
+                "suppressed":  list(getattr(priors, "suppressed_classes", []) or []),
+                "modalities":  list(getattr(priors, "recommended_modalities", []) or []),
+            },
+        )
+
     print(f"\n  [swarm] target        : {target}")
     print(f"  [swarm] repo_path     : {repo_path}")
     print(f"  [swarm] agents loaded : {len(registry)}")
+    if priors and getattr(priors, "total_scans", 0):
+        boosted = ", ".join(getattr(priors, "boosted_classes", [])[:4]) or "—"
+        print(f"  [swarm] flywheel scans: {priors.total_scans}  boosted: {boosted}")
     if registry:
         for aid, cls in sorted(registry.items()):
             phases = getattr(cls, "MAAC_PHASES", []) or []
@@ -118,6 +161,7 @@ def run_swarm(
         agent_registry=registry,
         stop_event=stop_event,
         verbose=verbose,
+        priors=priors,
     )
     corr_thread = threading.Thread(
         target=correlator.run, name="argus-correlator", daemon=True,

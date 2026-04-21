@@ -16,7 +16,6 @@ Run: pytest tests/ -q
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -42,6 +41,12 @@ FORBIDDEN_STRINGS = [
     "MOCK-L2-01",
     "MOCK-L2-02",
 ]
+
+
+# Expected minimum agent count post-2026-04-21. New agents can raise this
+# without breaking the test; agent deletion fails the test, which is what
+# we want.
+EXPECTED_MIN_AGENTS = 12   # 10 offensive + MT-14 + MC-15
 
 
 def _iter_source_files():
@@ -96,6 +101,32 @@ def test_every_agent_declares_maac_phases():
     assert not missing, (
         f"Agents without MAAC_PHASES: {missing}. Every offensive agent "
         "must declare the MAAC phase(s) it covers."
+    )
+
+
+def test_agent_count_meets_minimum():
+    """Regression guard — accidental deletion of agent files fails the test."""
+    import importlib.util
+    import inspect
+    from argus.agents.base import BaseAgent
+
+    agents_dir = SRC / "agents"
+    count = 0
+    for py in sorted(agents_dir.glob("*.py")):
+        if py.stem in ("__init__", "base"):
+            continue
+        spec = importlib.util.spec_from_file_location(py.stem, py)
+        mod  = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (issubclass(obj, BaseAgent) and obj is not BaseAgent
+                    and obj.AGENT_ID):
+                count += 1
+                break
+    assert count >= EXPECTED_MIN_AGENTS, (
+        f"Agent count regression: found {count}, expected at least "
+        f"{EXPECTED_MIN_AGENTS}. Bump EXPECTED_MIN_AGENTS only when "
+        f"intentionally adding agents, never when deleting them."
     )
 
 
