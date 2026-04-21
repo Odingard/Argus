@@ -345,6 +345,54 @@ def run_layer5(run: PipelineRun, args) -> None:
     from argus.layer5.chain_synthesizer import run_layer5 as _run_l5
     run.l5 = _run_l5(run.l4, run.l2, l1_report=run.l1, verbose=args.verbose)
 
+    # Merge any chains the live correlator already synthesized in-flight
+    # (only populated when --swarm was set). These are gravy on top of
+    # whatever the static L5 Opus call produced. Existing chain_ids
+    # deduplicate.
+    correlator_chains = getattr(run, "l5_correlator_chains", None) or []
+    if correlator_chains:
+        from argus.shared.models import ExploitChain, ExploitStep
+        existing_ids = {c.chain_id for c in run.l5.chains}
+        added = 0
+        for raw in correlator_chains:
+            cid = raw.get("chain_id") or ""
+            if not cid or cid in existing_ids:
+                continue
+            steps = [
+                ExploitStep(
+                    step=s.get("step", i + 1),
+                    action=s.get("action", ""),
+                    payload=s.get("payload"),
+                    achieves=s.get("achieves", ""),
+                )
+                for i, s in enumerate(raw.get("steps", []))
+            ]
+            chain = ExploitChain(
+                chain_id=cid,
+                title=raw.get("title", "Correlator chain"),
+                component_deviations=raw.get("finding_ids", []),
+                steps=steps,
+                poc_code=raw.get("poc_code", ""),
+                cvss_estimate=raw.get("cvss_estimate", ""),
+                mitre_atlas_ttps=raw.get("mitre_atlas_ttps", []),
+                owasp_llm_categories=raw.get("owasp_llm_categories", []),
+                preconditions=raw.get("preconditions", []),
+                blast_radius=raw.get("blast_radius", "MEDIUM"),
+                entry_point=raw.get("entry_point", "unknown"),
+                combined_score=float(raw.get("combined_score", 0.75)),
+            )
+            run.l5.chains.append(chain)
+            existing_ids.add(cid)
+            added += 1
+        if added:
+            print(f"  [L5] merged {added} correlator-synthesized chain(s)")
+            run.l5.critical_count = sum(
+                1 for c in run.l5.chains if c.blast_radius == "CRITICAL"
+            )
+            run.l5.high_count = sum(
+                1 for c in run.l5.chains if c.blast_radius == "HIGH"
+            )
+
     output_file = _layer_path(run.output_dir, 5)
     from dataclasses import asdict
     _save_json({
@@ -560,6 +608,95 @@ def _run_agent_thread(
 
 
 # ── Swarm Orchestrator ────────────────────────────────────────────────────────
+
+def _run_swarm_runtime(run: object, args) -> None:
+    """
+    Coordinated swarm runtime (argus.swarm). Replaces `_run_parallel_swarm`
+    when `--swarm` is set. Does three things the thread-pool path cannot:
+
+      1. Funnels every agent finding through a shared blackboard as it
+         lands (not batched at end).
+      2. Runs a LiveCorrelator thread that fires Haiku chain-judgements
+         on candidate clusters mid-run, with Opus escalation for
+         high-confidence chains — the patent's "correlation agent"
+         operating live, not statically at L5.
+      3. Pheromone-weights hot files on the blackboard so the operator
+         can see which files the swarm is converging on.
+
+    Output is still written to the classic L4 deviations shape so L5/L6/L7
+    still consume it unchanged. Correlator-synthesized Opus chains are
+    stashed at run.l5_correlator_chains for run_layer5 to merge in.
+    """
+    from argus.swarm.runtime import run_swarm as _swarm_run
+    from argus.shared.models import L4Deviations
+
+    # Repo must exist before agents can scan it. If it doesn't, fall back
+    # to the classic path (which handles MCP-only / remote targets).
+    if not run.repo_path or not os.path.exists(run.repo_path):
+        print(f"\n  {GRAY}[swarm] no repo_path — deferring to classic "
+              f"thread-pool swarm{RESET}")
+        _run_parallel_swarm(run, args)
+        return
+
+    print(f"\n{BOLD}{'━'*62}{RESET}")
+    print(f"{BOLD}  SWARM RUNTIME — blackboard + live correlator{RESET}")
+    print(f"{'━'*62}")
+
+    result = _swarm_run(
+        target=run.target,
+        repo_path=run.repo_path,
+        output_dir=run.output_dir,
+        verbose=args.verbose,
+    )
+
+    # Build L4 deviations from the swarm's findings so downstream layers
+    # see a pipeline that looks identical to the thread-pool version.
+    if run.l4 is None:
+        run.l4 = L4Deviations(target=run.target)
+
+    # Rehydrate AgentFinding objects from the dicts the swarm returned.
+    from argus.agents.base import AgentFinding
+    agent_findings: list = []
+    for fd in result.get("findings", []):
+        try:
+            agent_findings.append(AgentFinding(**fd))
+        except TypeError:
+            # Forward-compat: if AgentFinding grew a new field after the
+            # swarm wrote its dicts, ignore unknown keys.
+            known = {k: v for k, v in fd.items()
+                     if k in AgentFinding.__annotations__}
+            agent_findings.append(AgentFinding(**known))
+
+    deviations = [_agent_finding_to_deviation(f) for f in agent_findings]
+    run.l4.deviations.extend(deviations)
+    run.l4.high_confidence += len(deviations)
+
+    # Persist L4 so `--from-layer 5` resume still works.
+    from dataclasses import asdict
+    output_file = _layer_path(run.output_dir, 4)
+    _save_json({
+        "target":           run.l4.target,
+        "total_deviations": len(run.l4.deviations),
+        "high_confidence":  run.l4.high_confidence,
+        "medium_confidence": run.l4.medium_confidence,
+        "low_confidence":   run.l4.low_confidence,
+        "deviations":       [asdict(d) for d in run.l4.deviations],
+    }, output_file)
+
+    # Stash correlator-synthesized chains where run_layer5 can pick them up.
+    run.l5_correlator_chains = result.get("opus_chains", [])
+
+    # Mark layers 2-4 complete so the pipeline counter is honest. The
+    # swarm subsumes classical L2/L3/L4 by producing the same shape.
+    for n in (2, 3, 4):
+        if n not in run.completed_layers:
+            run.completed_layers.append(n)
+
+    print(f"\n  {_color('✓', BOLD)} Swarm complete — "
+          f"{len(agent_findings)} findings, "
+          f"{len(result.get('hypotheses', []))} chain hypotheses, "
+          f"{len(run.l5_correlator_chains)} Opus-synthesized chains")
+
 
 def _run_parallel_swarm(run: object, args) -> None:
     """
@@ -789,12 +926,19 @@ def run_pipeline(args) -> None:
                         repo_path=run.repo_path
                     )
 
-            # Step 2: Parallel swarm (L2-L4 + all agents concurrently)
+            # Step 2: Parallel swarm (L2-L4 + all agents concurrently).
+            # `--swarm` routes through the coordinated swarm runtime
+            # (blackboard + live correlator) instead of the classic
+            # thread-pool. The classic path remains default until the
+            # swarm path is fully validated against real targets.
             if start_layer <= 4:
                 if not (_layer_exists(run.output_dir, 2) and
                         _layer_exists(run.output_dir, 3) and
                         _layer_exists(run.output_dir, 4)):
-                    _run_parallel_swarm(run, args)
+                    if getattr(args, "swarm", False):
+                        _run_swarm_runtime(run, args)
+                    else:
+                        _run_parallel_swarm(run, args)
                 else:
                     print(f"\n  {GRAY}[CACHED] Layers 2-4 + agents (swarm output exists){RESET}")
                     run.completed_layers.extend([2, 3, 4])
@@ -907,6 +1051,13 @@ Examples:
     p.add_argument("--flywheel-report",
                    action="store_true",
                    help="Print intelligence flywheel report and exit")
+
+    # ── Coordinated swarm runtime ─────────────────────────────────────────
+    p.add_argument("--swarm", action="store_true",
+                   help="Use coordinated swarm runtime (blackboard + live "
+                        "correlator) instead of the classic thread-pool. "
+                        "Fires chain hypotheses mid-run; makes the patent's "
+                        "correlation-agent claim real.")
 
     # ── Live MCP attack mode ──────────────────────────────────────────────
     p.add_argument("--live", action="store_true",
