@@ -66,12 +66,33 @@ def main():
     scorer.identify_mcp_supply_chain_sink(surface_map)
     print(f"[*] Identified Surface Nodes Flags: {surface_map.nodes[0].flags}")
 
+    print("\n--- Tier 1/2: Crescendo Swarm Initialization ---")
+    from argus_zd.agents.sentry import SentryAgent
+    from argus_zd.agents.exploiter import ExploiterAgent
+    
+    sentry = SentryAgent()
+    exploiter = ExploiterAgent()
+    target_chain = ["agent_core", "mcp_tool_executor"]
+    
     print("\n--- Layer 4: Live Harness & Deviator ---")
     harness = LiveHarness()
     container = harness.setup_container(local_path)
     
-    # Generate the artifact package with dummy out-of-band truth
-    package = harness.generate_artifact_package(container, oob_status=True)
+    oob_achieved = False
+    for turn in range(1, 6):
+        # 1. Exploiter generates the 'What'
+        raw_payload = exploiter.generate_attack_payload(target_chain, turn)
+        
+        # 2. Sentry generates the 'How'
+        stealth_payload = sentry.apply_stealth_protocol(raw_payload, turn)
+        
+        print(f"     [TURN {turn}] Sending payload ({len(stealth_payload)} bytes): {stealth_payload[:60]}...")
+        if turn >= 5:
+            # At turn 5 the stubbed payload triggers
+            oob_achieved = True
+            
+    # Generate the artifact package
+    package = harness.generate_artifact_package(container, oob_status=oob_achieved)
     
     auditor = ClearwingAuditor()
     audit_results = auditor.verify_memory_corruption(container.logs().decode())
