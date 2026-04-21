@@ -1152,6 +1152,17 @@ Examples:
     p.add_argument("--serve-port", type=int, default=8787,
                    help="Webhook bind port (default 8787)")
 
+    # ── Drift detection (sinkholes S1, S3) ───────────────────────────────
+    p.add_argument("--drift", default=None, metavar="PRIOR_DIR",
+                   help="Compare a prior run directory against the current "
+                        "run output-dir and print ghost / new / changed "
+                        "findings and chains. Closes sinkhole S1.")
+    p.add_argument("--entitlements", nargs="+", default=None,
+                   metavar="RUN_DIR",
+                   help="Walk the given ARGUS run directories in order and "
+                        "print per-agent cumulative entitlement drift. "
+                        "Closes sinkhole S3.")
+
     # ── Stateful harness mode ─────────────────────────────────────────────
     p.add_argument("--harness", action="store_true",
                    help="Run the stateful runtime harness instead of a "
@@ -1198,6 +1209,33 @@ Examples:
     if getattr(args, 'serve', False):
         from argus.integrations import run_server
         run_server(host=args.serve_host, port=args.serve_port)
+        return
+
+    # Drift detection modes (sinkholes S1, S3)
+    if getattr(args, 'drift', None):
+        from argus.drift.compare import compare_runs, render_drift_text
+        report = compare_runs(prior_dir=args.drift, current_dir=args.output)
+        print(render_drift_text(report))
+        import json as _json
+        drift_path = Path(args.output) / "drift_report.json"
+        Path(args.output).mkdir(parents=True, exist_ok=True)
+        drift_path.write_text(_json.dumps(report.to_dict(), indent=2, default=str),
+                              encoding="utf-8")
+        print(f"\n  drift report → {drift_path}")
+        return
+
+    if getattr(args, 'entitlements', None):
+        from argus.drift.entitlements import (
+            entitlement_drift, render_entitlement_text,
+        )
+        report = entitlement_drift(args.entitlements)
+        print(render_entitlement_text(report))
+        import json as _json
+        Path(args.output).mkdir(parents=True, exist_ok=True)
+        ent_path = Path(args.output) / "entitlement_drift.json"
+        ent_path.write_text(_json.dumps(report.to_dict(), indent=2, default=str),
+                            encoding="utf-8")
+        print(f"\n  entitlement drift → {ent_path}")
         return
 
     if not args.live and not args.target:
