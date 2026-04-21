@@ -84,6 +84,28 @@ _CAPABILITY_CREEP = re.compile(
     r")\b"
 )
 
+# OAuth-overgrant signatures — Vercel April-2026 class. A tool that
+# declares "Allow All" / wildcard scopes at install time is the
+# single biggest third-party-risk factor in the Vercel breach chain.
+_OAUTH_OVERGRANT = [
+    re.compile(r"(?i)\ballow[_ ]?all\b"),
+    re.compile(r"\"scopes?\"\s*:\s*\[\s*\"\*\"\s*\]"),
+    re.compile(r"(?i)\bfull[_ -]?access\b"),
+    re.compile(r"(?i)\b(?:admin\.|drive\b(?!\.readonly)|gmail\b|cloud-platform)"),
+]
+
+# External AI vendors whose OAuth integrations historically carry
+# corp-wide scopes. Presence of one of these hostnames in a tool's
+# description/schema — combined with any scope declaration — is the
+# Context.ai / Vercel pattern.
+_AI_VENDOR_HOSTS = re.compile(
+    r"(?i)\b("
+    r"context\.ai|openai\.com|anthropic\.com|perplexity\.ai|"
+    r"cohere\.com|mistral\.ai|huggingface\.co|replicate\.com|"
+    r"elevenlabs\.io|runwayml\.com|midjourney\.com|stability\.ai"
+    r")\b"
+)
+
 # Transitive-fetch hooks: the tool itself will go out and pull more
 # config/policy at runtime. This is where supply-chain hijacks land.
 _TRANSITIVE_FETCH = re.compile(
@@ -160,6 +182,36 @@ def _scan_transitive_fetch(text: str, *, where: str) -> list[_SCHit]:
     )]
 
 
+def _scan_oauth_overgrant(surface: Surface) -> list[_SCHit]:
+    """SC-T7 — wildcard / Allow-All / overbroad OAuth scope at install time."""
+    blob = (surface.description or "") + " " + str(surface.schema or {})
+    for pat in _OAUTH_OVERGRANT:
+        m = pat.search(blob)
+        if m:
+            return [_SCHit(
+                technique="SC-T7-oauth-overgrant", severity="HIGH",
+                where=f"{surface.name}.scope_declaration",
+                snippet=m.group(0)[:160],
+                pattern_name="oauth_overgrant",
+            )]
+    return []
+
+
+def _scan_third_party_ai(surface: Surface) -> list[_SCHit]:
+    """SC-T8 — external AI vendor referenced in tool metadata
+    (Context.ai / Vercel April-2026 class)."""
+    blob = (surface.description or "") + " " + str(surface.schema or {})
+    m = _AI_VENDOR_HOSTS.search(blob)
+    if not m:
+        return []
+    return [_SCHit(
+        technique="SC-T8-third-party-ai-integration", severity="HIGH",
+        where=f"{surface.name}.origin",
+        snippet=f"third-party AI vendor: {m.group(0)}",
+        pattern_name="third_party_ai_integration",
+    )]
+
+
 def _has_provenance(surface: Surface) -> bool:
     """True iff the surface declares at least one provenance key."""
     schema = surface.schema or {}
@@ -186,6 +238,8 @@ def _audit_surface(surface: Surface) -> list[_SCHit]:
     hits.extend(_scan_urls(desc, where=where_desc))
     hits.extend(_scan_capability_creep(desc, where=where_desc))
     hits.extend(_scan_transitive_fetch(desc, where=where_desc))
+    hits.extend(_scan_oauth_overgrant(surface))
+    hits.extend(_scan_third_party_ai(surface))
 
     # Walk schema properties for URLs / creep / fetch hooks.
     schema = surface.schema or {}
@@ -317,6 +371,8 @@ class SupplyChainAgent(BaseAgent):
         "SC-T4-version-drift",
         "SC-T5-transitive-fetch",
         "SC-T6-untrusted-host",
+        "SC-T7-oauth-overgrant",
+        "SC-T8-third-party-ai-integration",
     ]
     MAAC_PHASES = [1, 8]           # Reconnaissance + Environment Pivoting
     PERSONA     = "auditor"

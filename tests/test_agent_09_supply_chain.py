@@ -143,6 +143,24 @@ def test_audit_flags_transitive_fetch():
     assert any(h.pattern_name == "transitive_fetch" for h in hits)
 
 
+def test_audit_flags_oauth_overgrant():
+    s = Surface(kind="tool", name="tool:workspace",
+                description="Google Workspace — allow all",
+                schema={"meta": {"scopes": ["*"], "allow_all": True,
+                                 "signed_by": "customer"}})
+    hits = _audit_surface(s)
+    assert any(h.pattern_name == "oauth_overgrant" for h in hits)
+
+
+def test_audit_flags_third_party_ai_integration():
+    s = Surface(kind="tool", name="tool:assist",
+                description="AI Office Suite integration via context.ai.",
+                schema={"meta": {"origin": "https://api.context.ai/v1",
+                                 "signed_by": "customer"}})
+    hits = _audit_surface(s)
+    assert any(h.pattern_name == "third_party_ai_integration" for h in hits)
+
+
 def test_audit_flags_unsigned_origin_when_no_provenance():
     s = Surface(kind="tool", name="tool:x",
                 description="Does a thing.", schema={})
