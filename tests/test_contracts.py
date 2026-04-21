@@ -191,6 +191,47 @@ def test_sandbox_requires_evidence_not_just_exit_zero():
 
 # ── 5. Stale vaporware check ──────────────────────────────────────────────────
 
+def test_sandbox_static_import_gate_rejects_fake_pocs():
+    """
+    The L7 sandbox MUST statically reject PoCs that don't import any
+    top-level package from the target — otherwise Opus can slip past
+    the real-library contract by defining its own version of the
+    vulnerable class and printing the ARGUS_POC_LANDED marker under a
+    trivially-true condition. This is the exact Bugcrowd-rejection
+    failure mode from 2026-04-20 and was observed recurring in the
+    first CrewAI swarm run before this gate was added.
+    """
+    from argus.layer7.sandbox import _poc_imports_target
+
+    # Fake-import PoC — the class is declared locally, no import of
+    # the target shipping library.
+    fake_poc = (
+        "def langgraph_adapter():\n"
+        "    messages = ['<instruct>']\n"
+        "    if '<instruct>' in messages[0]:\n"
+        "        print('ARGUS_POC_LANDED:fake')\n"
+    )
+    ok, reason = _poc_imports_target(fake_poc, ["crewai"])
+    assert ok is False
+    assert "does not import" in reason.lower()
+
+    # Real-import PoC — imports the real shipping library.
+    real_poc = (
+        "from crewai.agents import LangGraphAgentAdapter\n"
+        "adapter = LangGraphAgentAdapter()\n"
+        "print('ARGUS_POC_LANDED:real')\n"
+    )
+    ok, matched = _poc_imports_target(real_poc, ["crewai"])
+    assert ok is True
+    assert matched == "crewai"
+
+    # When target packages cannot be derived (empty list), the gate
+    # degrades open so unusual repo shapes aren't hard-blocked. L7's
+    # evidence-marker requirement is the final filter.
+    ok, reason = _poc_imports_target(real_poc, [])
+    assert ok is True
+
+
 def test_argus_zd_tree_is_gone():
     """
     argus_zd/ was the stub tree that shipped fake CRITICAL findings in v0.4.0.

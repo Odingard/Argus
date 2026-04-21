@@ -42,6 +42,155 @@ def _has_evidence(output: str) -> bool:
     return any(p.search(output) for p in _EVIDENCE_PATTERNS)
 
 
+def _target_packages(repo_path: str) -> list[str]:
+    """
+    Return the list of TOP-LEVEL installable Python packages that
+    belong to the target repository. These are the names a PoC MUST
+    import from to prove it actually exercises the shipping library.
+
+    Resolution, in order:
+
+      1. Walk UP from repo_path looking for a pyproject.toml /
+         setup.py / setup.cfg. If found, extract the distribution
+         name and use it as the package name (dash → underscore).
+         This covers the common case where the user scopes a scan
+         to a sub-directory (e.g. src/crewai/agents) — we still want
+         to require imports from ``crewai`` not ``agents``.
+      2. If the walk-up finds nothing, fall back to the name of the
+         directory immediately containing the deepest ``__init__.py``
+         at-or-above repo_path. This catches loose source trees.
+      3. As an additional belt, if the package root has a ``src/``
+         layout, include the names of top-level dirs under src/ that
+         carry an __init__.py.
+
+    Generic container names (src, lib, tests, test, docs, examples)
+    are never returned — they would make the import gate useless.
+    """
+    from pathlib import Path as _P
+    import re as _re
+    candidates: set[str] = set()
+
+    root = _P(repo_path).resolve()
+    if not root.exists():
+        return []
+
+    # ── (1) Walk up for a packaging manifest ───────────────────────────
+    manifest_dir: _P | None = None
+    cur = root
+    for _ in range(8):           # cap ascent to 8 levels
+        for manifest in ("pyproject.toml", "setup.py", "setup.cfg"):
+            if (cur / manifest).exists():
+                manifest_dir = cur
+                break
+        if manifest_dir is not None:
+            break
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+
+    if manifest_dir is not None:
+        # pyproject.toml — prefer [project].name / [tool.poetry].name
+        pp = manifest_dir / "pyproject.toml"
+        if pp.exists():
+            try:
+                text = pp.read_text(encoding="utf-8", errors="ignore")
+                # Tolerant single-line name extraction that survives
+                # without a TOML parser (pyproject specs differ and we
+                # don't want to add tomllib handling here).
+                for m in _re.finditer(r'(?mi)^\s*name\s*=\s*["\'`]([^"\'`]+)',
+                                      text):
+                    candidates.add(m.group(1).replace("-", "_").lower())
+            except OSError:
+                pass
+        # setup.py — grep for name="..."
+        sp = manifest_dir / "setup.py"
+        if sp.exists():
+            try:
+                text = sp.read_text(encoding="utf-8", errors="ignore")
+                for m in _re.finditer(r'name\s*=\s*["\']([^"\']+)', text):
+                    candidates.add(m.group(1).replace("-", "_").lower())
+            except OSError:
+                pass
+        # setup.cfg — grep for name = ...
+        sc = manifest_dir / "setup.cfg"
+        if sc.exists():
+            try:
+                text = sc.read_text(encoding="utf-8", errors="ignore")
+                for m in _re.finditer(r'(?mi)^\s*name\s*=\s*([A-Za-z0-9_\-\.]+)',
+                                      text):
+                    candidates.add(m.group(1).replace("-", "_").lower())
+            except OSError:
+                pass
+
+        # If manifest_dir has a src/ layout, add top-level src/<pkg>/
+        src_dir = manifest_dir / "src"
+        if src_dir.exists():
+            for child in src_dir.iterdir():
+                if (child.is_dir() and (child / "__init__.py").exists()):
+                    candidates.add(child.name.lower())
+        # Or a flat layout: manifest_dir/<pkg>/__init__.py
+        for child in manifest_dir.iterdir():
+            if (child.is_dir() and (child / "__init__.py").exists()):
+                candidates.add(child.name.lower())
+
+    # ── (2) Fallback: walk UP from repo_path to the deepest package root ──
+    if not candidates:
+        cur = root
+        last_pkg: str = ""
+        for _ in range(8):
+            if (cur / "__init__.py").exists():
+                last_pkg = cur.name.lower()
+            elif last_pkg:
+                break
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+        if last_pkg:
+            candidates.add(last_pkg)
+
+    # Strip generic container names that would let anything pass.
+    for generic in ("src", "lib", "tests", "test", "docs", "examples",
+                    "__pycache__", ""):
+        candidates.discard(generic)
+
+    return sorted(candidates)
+
+
+def _poc_imports_target(poc_code: str, target_packages: list[str]) -> tuple[bool, str]:
+    """
+    Check that the PoC imports at least one top-level package from the
+    target. Accepts:
+        from <pkg>...           import ...
+        from <pkg>              import ...
+        import <pkg>[.<more>]   [as ...]
+
+    Returns (ok, matched_package_or_reason). Rejects PoCs that declare
+    their own version of the vulnerable class instead of importing it.
+    """
+    import re as _re
+    if not target_packages:
+        # If we can't determine a target package name, fall through —
+        # this keeps the check from being a hard blocker on unusual
+        # repo shapes. L7 will still require evidence markers for pass.
+        return True, "target package set empty; skipping import check"
+
+    pattern = _re.compile(
+        r"^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)",
+        _re.MULTILINE,
+    )
+    imported_roots = {m.group(1).lower() for m in pattern.finditer(poc_code)}
+
+    for pkg in target_packages:
+        if pkg in imported_roots:
+            return True, pkg
+
+    return False, (
+        f"PoC does not import any of the target's top-level packages "
+        f"{target_packages}. Imports detected: {sorted(imported_roots)}. "
+        f"Reject: theoretical PoC that does not exercise the shipping library."
+    )
+
+
 def _summarize_network(output: str) -> str:
     """
     Best-effort extract of network activity from PoC stdout/stderr. We
@@ -78,19 +227,34 @@ async def _validate_chain_via_docker(chain: ExploitChain, repo_path: str) -> tup
     if not chain.poc_code:
         return False, "No PoC code available for validation."
 
+    payload = chain.poc_code
+    if payload.startswith("```python"):
+        payload = payload[9:]
+    elif payload.startswith("```"):
+        payload = payload[3:]
+    if payload.endswith("```"):
+        payload = payload[:-3]
+    payload = payload.strip()
+
+    # ── Static PoC gate: reject theoretical PoCs BEFORE sandbox ───────────
+    # Opus can otherwise slip past the prompt-level real-library contract
+    # by declaring its own version of the vulnerable class and printing
+    # ARGUS_POC_LANDED under a trivial guard. The sandbox would then
+    # dutifully "validate" a PoC that never touched the shipping code —
+    # exactly the Bugcrowd failure mode. Refuse up-front if the PoC does
+    # not import at least one top-level package belonging to the target.
+    tpkgs = _target_packages(repo_path)
+    imports_ok, reason = _poc_imports_target(payload, tpkgs)
+    if not imports_ok:
+        return False, (
+            f"[static-gate] {reason}\n"
+            f"--- rejected PoC ---\n{payload[:600]}"
+        )
+
     with tempfile.TemporaryDirectory() as tmpdir:
         poc_path = os.path.join(tmpdir, "poc.py")
-        payload = chain.poc_code
-
-        if payload.startswith("```python"):
-            payload = payload[9:]
-        elif payload.startswith("```"):
-            payload = payload[3:]
-        if payload.endswith("```"):
-            payload = payload[:-3]
-
         with open(poc_path, "w") as f:
-            f.write(payload.strip())
+            f.write(payload)
 
         # Copy the (read-only mounted) target into a writable path inside the
         # container, then `pip install -e .` if it's a Python package so the
