@@ -16,12 +16,8 @@ Chains are synthesized across deviation clusters — not just per-finding.
 from __future__ import annotations
 
 import json
-import sys
 import hashlib
-from pathlib import Path
-from dataclasses import asdict
 from typing import Optional
-from itertools import combinations
 
 from argus.shared.client import ArgusClient
 
@@ -37,7 +33,9 @@ from argus.shared.prompts import L5_MODEL, L5_CHAIN_SYNTHESIS_PROMPT
 HIGH_CONFIDENCE_THRESHOLD = 0.70     # only these pass to synthesis
 MAX_CHAINS_TO_SYNTHESIZE  = 20       # cap on chain synthesis calls
 MAX_DEVIATIONS_PER_SYNTH  = 12       # deviations fed to each synthesis call
-MIN_CHAIN_SCORE           = 0.60     # minimum combined_score for a chain to be kept
+MIN_CHAIN_SCORE           = 0.50     # min combined_score to keep — lowered
+                                     # from 0.60 so MEDIUM-composed chains
+                                     # survive; L7 sandbox is the final filter
 
 # Blast radius for chains based on component deviation impacts
 CHAIN_BLAST_MAP = {

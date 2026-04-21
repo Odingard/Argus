@@ -362,6 +362,31 @@ For each chain:
 4. DOCUMENT — produce a complete reproducible PoC
 5. STRICT RULE: Attack chains must be non-destructive proof-of-concepts only. Do not generate payloads that delete data, cause DoS, or permanently alter systems. Use benign verification markers.
 
+CHAINING RULES:
+- You may compose MEDIUM-severity deviations into a HIGH or CRITICAL chain
+  when the composition materially amplifies impact (e.g. broad MCP schema +
+  no caller auth = unauthenticated tool misuse). Don't reject mid-severity
+  components reflexively — the whole point of synthesis is to find the
+  compositions that individually-classified findings miss.
+- If the deviations genuinely don't chain, return an empty list. Do NOT
+  fabricate chains to satisfy the output shape.
+
+POC REPRODUCIBILITY CONTRACT (non-negotiable):
+Every poc_code you emit MUST be executable against the SHIPPING library:
+- Import real symbols from their real module paths (derive from the file
+  path of the component deviations). NEVER redeclare the vulnerable class
+  inside the PoC.
+- Exercise the real dispatch / loader / tool path with attacker input.
+- On success, print `ARGUS_POC_LANDED:<chain-id>` on its own line AND
+  write a marker file at /tmp/argus_poc_<chain-id>.
+- `sys.exit(1)` if the vulnerable path wasn't reached (ImportError,
+  patched version, authorization gate engaged). Silent success on a
+  patched library is worse than a loud crash.
+- Non-destructive: no rm, no real network, no DB writes.
+Triagers reject theoretical PoCs. 22 CRITICAL findings were closed as "not
+reproducible" on 2026-04-20 because the PoCs stubbed the vulnerable class
+instead of importing it. Do not repeat that.
+
 HIGH-CONFIDENCE DEVIATIONS (combined_score >= 0.7):
 {deviations}
 
