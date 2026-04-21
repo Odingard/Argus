@@ -40,7 +40,6 @@ from argus.shared.prompts import L6_MODEL, L6_CVE_DRAFT_PROMPT, L6_ADVISORY_PROM
 DISCLOSURE_DAYS   = 90
 REPORTER          = "Andre Byrd, Odingard Security (andre.byrd@odingard.com)"
 REPORTER_ORG      = "Odingard Security / Six Sense Enterprise Services"
-ARGUS_TAGLINE     = "Every AI agent we've scanned had at least one critical finding."
 
 # CWE mapping by vulnerability class
 CLASS_TO_CWE = {
@@ -295,9 +294,8 @@ def _generate_advisory(
 
 ## About Odingard Security / ARGUS
 
-Odingard Security is a veteran-founded, AI-native cybersecurity company.  
-ARGUS is an autonomous AI red team platform using the TRIDENT vulnerability framework.  
-*"{ARGUS_TAGLINE}"*
+Odingard Security is a veteran-founded, AI-native cybersecurity company.
+ARGUS is an autonomous AI red team platform for agentic AI and MCP systems.
 
 `pip install argus-redteam` | github.com/Odingard/Argus
 """

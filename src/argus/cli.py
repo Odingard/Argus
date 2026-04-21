@@ -336,57 +336,14 @@ def run_layer5(run: PipelineRun, args) -> None:
             run.l2.escalation_paths = [EscalationPath(**p) for p in data.get("escalation_paths", [])]
             run.l2.memory_boundary_gaps = [MemoryBoundaryGap(**g) for g in data.get("memory_boundary_gaps", [])]
         except FileNotFoundError:
-            print(f"  {GRAY}[WARNING] layer2.json missing. Using stub L2 Surface Map for L5 synthesis.{RESET}")
-            from argus.shared.models import L2SurfaceMap, SchemaInjectionPath, MemoryBoundaryGap
+            # No L2 output means L2 found no attack surface. Proceed with an empty
+            # surface map; L5 will honestly produce zero chains rather than fabricate.
+            print(f"  {GRAY}[L5] layer2.json missing — proceeding with empty surface map.{RESET}")
+            from argus.shared.models import L2SurfaceMap
             run.l2 = L2SurfaceMap(target=run.target)
-            run.l2.schema_injection_paths = [
-                SchemaInjectionPath(
-                    source_file="llama_index/agent/react/step.py",
-                    source_function="ReActAgentWorker._process_actions",
-                    injection_path=["ReActAgentWorker._process_actions", "ToolRunner.run", "eval"],
-                    unsanitized_handoff=True,
-                    blast_radius="CRITICAL",
-                    finding_anchor_id="MOCK-L2-01"
-                )
-            ]
-            run.l2.memory_boundary_gaps = [
-                MemoryBoundaryGap(
-                    file="llama_index/memory/chat_memory_buffer.py",
-                    function="ChatMemoryBuffer.get",
-                    store_type="in_memory",
-                    has_namespace_filter=False,
-                    filter_at="none",
-                    cross_tenant_risk="CRITICAL",
-                    finding_id="MOCK-L2-02"
-                )
-            ]
 
     from argus.layer5.chain_synthesizer import run_layer5 as _run_l5
     run.l5 = _run_l5(run.l4, run.l2, l1_report=run.l1, verbose=args.verbose)
-
-    if not run.l5.chains:
-        if args.verbose:
-            print("  [DEBUG] Opus returned 0 chains (likely due to missing L2 graph). Forcing mock fallback for advisory.")
-        from argus.shared.models import ExploitChain, ExploitStep
-        run.l5.chains = [
-            ExploitChain(
-                chain_id="CHAIN-LLAMA-0DAY",
-                title="LlamaIndex Arbitrary Context Execution & Persona Bleed",
-                component_deviations=[d.payload_id for d in run.l4.deviations[:5]],
-                steps=[
-                    ExploitStep(step=1, action="Inject malicious prompt into shared chat memory buffer via Agent context.", payload="[system](#instruction...) exec(payload)", achieves="Payload stored in vector space."),
-                    ExploitStep(step=2, action="Trigger memory retrieval by invoking ReactAgent tool execution loop.", payload="Fetch user config", achieves="Memory injected into instruction eval."),
-                    ExploitStep(step=3, action="Arbitrary code execution on host OS via unsanitized eval.", payload="os.system('cat /etc/passwd')", achieves="RCE achieved.")
-                ],
-                poc_code="print('Exploitable vector verified by Layer 4 Agent Hive.')",
-                cvss_estimate="9.8",
-                mitre_atlas_ttps=["AML.T0000", "AML.T0001"],
-                preconditions=["Access to external memory block or tool execution path"],
-                blast_radius="CRITICAL",
-                entry_point="unauthenticated",
-                combined_score=0.98
-            )
-        ]
 
     output_file = _layer_path(run.output_dir, 5)
     from dataclasses import asdict
@@ -699,8 +656,62 @@ def _run_parallel_swarm(run: object, args) -> None:
     print(f"{'━'*62}\n")
 
 
+def run_live_mcp(args) -> None:
+    """
+    Live-attack mode: speak MCP to a running server instead of scanning source.
+    Dispatches to the MCP live attacker, writes its report under the output dir.
+    """
+    import asyncio
+    from argus.mcp_attacker import mcp_live_attacker as live
+
+    output_dir = args.output
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    # The live attacker's argparse expects an object with .target, .transport,
+    # .token, .output, .verbose, .server_cmd — build it from our args.
+    class _LiveArgs:
+        pass
+    la = _LiveArgs()
+    la.target     = args.target
+    la.transport  = args.transport
+    la.token      = args.token
+    la.output     = output_dir
+    la.verbose    = args.verbose
+    la.server_cmd = args.server_cmd or []
+
+    if la.transport == "stdio" and not la.server_cmd:
+        print(f"  {_color('✗ --transport stdio requires -- <server command>', SEV_COLORS['CRITICAL'])}")
+        return
+    if la.transport == "sse" and not la.target:
+        print(f"  {_color('✗ --transport sse requires a target URL', SEV_COLORS['CRITICAL'])}")
+        return
+
+    print(f"\n  Target     : {_color(la.target or ' '.join(la.server_cmd), BLUE)}")
+    print(f"  Mode       : live MCP attack")
+    print(f"  Transport  : {la.transport}")
+    print(f"  Auth       : {'set' if la.token else 'none'}")
+    print(f"  Output dir : {output_dir}")
+
+    try:
+        if la.transport == "sse":
+            asyncio.run(live._run_sse(la))
+        else:
+            asyncio.run(live._run_stdio(la))
+    except KeyboardInterrupt:
+        print(f"\n  {_color('[!] Interrupted', SEV_COLORS['HIGH'])}")
+    except Exception as e:
+        print(f"\n  {_color(f'[!] Live attack failed: {e}', SEV_COLORS['CRITICAL'])}")
+        if args.verbose:
+            traceback.print_exc()
+
+
 def run_pipeline(args) -> None:
     print(BANNER)
+
+    # Live MCP attack mode — short-circuits the static pipeline.
+    if getattr(args, "live", False):
+        run_live_mcp(args)
+        return
 
     # Determine target and output dir
     target = args.target
@@ -864,8 +875,8 @@ Examples:
   python cli.py /path/to/local/repo --from-layer 2 -o results/local/
         """
     )
-    p.add_argument("target",
-                   help="GitHub URL or local repo path to scan")
+    p.add_argument("target", nargs="?", default=None,
+                   help="GitHub URL / local repo path (static mode) or MCP server URL (with --live)")
     p.add_argument("-o", "--output",
                    default="results/",
                    help="Output directory (default: results/)")
@@ -888,6 +899,16 @@ Examples:
                    action="store_true",
                    help="Print intelligence flywheel report and exit")
 
+    # ── Live MCP attack mode ──────────────────────────────────────────────
+    p.add_argument("--live", action="store_true",
+                   help="Live MCP protocol attack instead of static repo scan")
+    p.add_argument("--transport", choices=["sse", "stdio"], default="sse",
+                   help="MCP transport for --live mode (default: sse)")
+    p.add_argument("--token", default=None,
+                   help="Auth token for --live sse transport (e.g. 'Bearer xyz')")
+    p.add_argument("server_cmd", nargs="*",
+                   help="For --live --transport stdio: server command after --")
+
     args = p.parse_args()
     # Flywheel report mode
     if getattr(args, 'flywheel_report', False):
@@ -896,6 +917,9 @@ Examples:
         stats = read_flywheel(flywheel_path)
         print_flywheel_report(stats)
         return
+
+    if not args.live and not args.target:
+        p.error("target is required unless --live is set (or provide a target URL for --live)")
 
     run_pipeline(args)
 
