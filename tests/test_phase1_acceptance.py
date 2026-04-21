@@ -24,7 +24,6 @@ agent crashes, corpus grows, no false positives on the clean target.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from argus.adapter.base import (
     AdapterObservation, BaseAdapter, Request, Response, Surface,

@@ -38,14 +38,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
 import argparse
 import hashlib
 import httpx
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional
 
 from argus.shared.client import ArgusClient
 
@@ -53,7 +52,6 @@ from argus.shared.client import ArgusClient
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client, StdioServerParameters
-from mcp.types import Tool, Resource, Prompt
 
 from argus.shared.prompts import HAIKU_MODEL, OPUS_MODEL
 
@@ -491,7 +489,7 @@ def _check_exploitation_indicators(response: str, payload: str) -> bool:
             return any(c in resp_lower for c in checks)
 
     # Generic: response is much larger than expected (data exfil indicator)
-    return len(response) > 2000 and not "error" in resp_lower
+    return len(response) > 2000 and "error" not in resp_lower
 
 
 def _classify_payload(payload: str) -> str:
@@ -550,7 +548,7 @@ async def protocol_attack(
                     title="MCP RPC endpoint accessible without authentication",
                     tool_name="*",
                     payload_used='{"method": "tools/list"} — no auth header',
-                    observed_behavior=f"HTTP 200 returned with tool list",
+                    observed_behavior="HTTP 200 returned with tool list",
                     expected_behavior="HTTP 401 or 403",
                     poc=f'curl -X POST {rpc_url} -d \'{{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{{}}}}\' ',
                     cvss_estimate="9.1 (CRITICAL) — AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
@@ -764,7 +762,7 @@ async def progress_token_abuse(
                 phase="PROGRESS",
                 severity="MEDIUM",
                 vuln_class="PHANTOM_MEMORY",
-                title=f"Server echoes caller-supplied progressToken in response",
+                title="Server echoes caller-supplied progressToken in response",
                 tool_name=name,
                 payload_used=f"progressToken={forged_token}",
                 observed_behavior="Forged token present in response body",
@@ -860,7 +858,7 @@ def _print_summary(report: MCPAttackReport) -> None:
     print(f"  MEDIUM  : {report.medium_count}")
 
     if report.findings:
-        print(f"\n  Findings:")
+        print("\n  Findings:")
         for f in sorted(report.findings, key=lambda x: ["CRITICAL","HIGH","MEDIUM","LOW"].index(x.severity)):
             sev_color = RED if f.severity == "CRITICAL" else AMBER if f.severity == "HIGH" else ""
             print(f"  {sev_color}[{f.severity}]{RESET} [{f.phase}] {f.title[:65]}")

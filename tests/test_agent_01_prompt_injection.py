@@ -8,16 +8,14 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 from argus.adapter.base import (
     AdapterObservation, BaseAdapter, Request, Response, Surface,
 )
 from argus.agents.agent_01_prompt_injection import (
-    DEFAULT_LEAK_PATTERNS, PromptInjectionHunter,
+    PromptInjectionHunter,
 )
-from argus.corpus_attacks import Corpus, EvolveCorpus
-from argus.observation import ObservationEngine, default_detectors
+from argus.corpus_attacks import EvolveCorpus
 
 
 # ── A reusable vulnerable target ─────────────────────────────────────────────

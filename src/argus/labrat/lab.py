@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from argus.labrat.config import LabConfig, LabConfigError
+from argus.labrat.config import LabConfig
 
 
 class LabError(Exception):

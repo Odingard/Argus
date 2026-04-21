@@ -42,12 +42,12 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from argus.adapter.base import (
-    AdapterError, AdapterObservation, BaseAdapter, Request, Surface,
+    AdapterError, BaseAdapter, Request, Surface,
 )
 from argus.agents.base import AgentFinding, BaseAgent
 from argus.corpus_attacks import EvolveCorpus
 from argus.observation import (
-    BehaviorDelta, DeltaKind, ObservationEngine, Verdict, default_detectors,
+    BehaviorDelta, ObservationEngine, Verdict, default_detectors,
 )
 from argus.session import Session
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import urllib.request
-from pathlib import Path
 
 import pytest
 
@@ -55,11 +54,11 @@ def test_evidence_integrity_changes_on_field_change():
     ev.record_request(surface="chat", request_id="r1", payload="a")
     sealed = ev.seal()
     original = sealed.integrity_sha
+    # notes isn't part of the integrity payload by design — the hash
+    # must still move when a field that IS part of it (pcap payload)
+    # changes.
     sealed.notes = "tampered"
     from argus.evidence.collector import _integrity
-    new = _integrity(sealed)
-    # Note: notes isn't part of the integrity payload by design;
-    # changing pcap MUST move the hash.
     sealed.pcap[0].payload = "MUTATED"
     mutated = _integrity(sealed)
     assert mutated != original

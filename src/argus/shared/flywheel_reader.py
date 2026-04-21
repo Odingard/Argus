@@ -436,14 +436,14 @@ def find_flywheel(output_dir: str) -> str:
 def print_flywheel_report(stats: FlywheelStats) -> None:
     """Print a summary of flywheel state — useful for `argus_zd.py --flywheel-report`."""
     print(f"\n{'━'*62}")
-    print(f"\033[1m  INTELLIGENCE FLYWHEEL REPORT\033[0m")
+    print("\033[1m  INTELLIGENCE FLYWHEEL REPORT\033[0m")
     print(f"{'━'*62}")
     print(f"  Total entries : {stats.total_entries}")
     print(f"  Total scans   : {stats.total_scans}")
     print(f"  Framework types: {', '.join(stats.framework_types_seen) or 'none'}")
 
     if stats.attack_class_stats:
-        print(f"\n  Attack class yield scores:")
+        print("\n  Attack class yield scores:")
         ranked = sorted(
             stats.attack_class_stats.values(),
             key=lambda x: x.yield_score, reverse=True
@@ -456,13 +456,13 @@ def print_flywheel_report(stats: FlywheelStats) -> None:
                   f"from {cls.total_occurrences} scans)")
 
     if stats.modality_effectiveness:
-        print(f"\n  Modality effectiveness (CRITICAL+HIGH yield rate):")
+        print("\n  Modality effectiveness (CRITICAL+HIGH yield rate):")
         for mod, rate in sorted(stats.modality_effectiveness.items(),
                                 key=lambda x: x[1], reverse=True):
             print(f"  {mod:<12} {rate:.0%}")
 
     if stats.framework_profiles:
-        print(f"\n  Framework profiles:")
+        print("\n  Framework profiles:")
         for ft, fp in stats.framework_profiles.items():
             print(f"  {ft:<20} {fp.total_scans} scans | "
                   f"avg {fp.avg_critical_chains} critical chains | "

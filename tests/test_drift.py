@@ -5,8 +5,7 @@ import json
 from pathlib import Path
 
 from argus.drift import (
-    compare_runs, DriftReport, FindingDiff,
-    entitlement_drift,
+    compare_runs, entitlement_drift,
 )
 
 

@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from argus.agents.base import AgentFinding
 from argus.swarm.chain_synthesis_v2 import (
-    OWASP_AGENTIC_TOP10, CompoundChain,
-    synthesize_compound_chain,
+    OWASP_AGENTIC_TOP10, synthesize_compound_chain,
 )
 
 

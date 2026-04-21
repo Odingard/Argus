@@ -11,7 +11,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from argus.adapter import A2AAdapter, InMemoryA2ABackend, Response
+from argus.adapter import A2AAdapter, InMemoryA2ABackend
 from argus.agents.agent_06_cross_agent_exfil import (
     CrossAgentExfiltrationAgent, TECHNIQUES, _CANARY,
 )

@@ -6,13 +6,10 @@ composite scorer. Offline — no API calls, no Docker, no network.
 """
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
 
 from argus.shared.ars import score_chain, score_finding, band
 from argus.shared.models import ExploitChain, ExploitStep
-from argus.swarm.blackboard import Blackboard, ChainHypothesis, HotFile
+from argus.swarm.blackboard import Blackboard, ChainHypothesis
 from argus.wilson.bundle import build_bundle_for_chain, verify_bundle
 
 

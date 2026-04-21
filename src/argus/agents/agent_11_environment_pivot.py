@@ -45,7 +45,7 @@ import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from argus.adapter.base import (
     AdapterError, BaseAdapter, Request, Surface,

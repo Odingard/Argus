@@ -64,8 +64,21 @@ OWASP_AGENTIC_TOP10: dict[str, dict[str, str]] = {
 DEFAULT_MAAC_PHASE_ORDER: dict[str, list[int]] = {
     "PI-01": [2],   "TP-02": [5],   "MP-03": [4],   "IS-04": [7],
     "CW-05": [2, 6], "XE-06": [7, 9], "PE-07": [5, 8], "RC-08": [5, 9],
-    "SC-09": [1, 8], "ME-10": [1, 3],
+    "SC-09": [1, 8], "ME-10": [1, 3], "EP-11": [8],
 }
+
+
+def _owasp_entry_for(vuln_class: str) -> dict:
+    """Fallback so novel vuln classes degrade gracefully instead of
+    KeyErroring. ENVIRONMENT_PIVOT is a special case — it wasn't in
+    the original OWASP Agentic AI Top-10 scoping, but ARGUS folds it
+    under AAI07 Privilege Escalation since the pivot is the post-
+    escalation blast path."""
+    if vuln_class in OWASP_AGENTIC_TOP10:
+        return OWASP_AGENTIC_TOP10[vuln_class]
+    if vuln_class == "ENVIRONMENT_PIVOT":
+        return {"id": "AAI07", "name": "Privilege Escalation (pivot)"}
+    return {"id": "AAI00", "name": "Uncategorised"}
 
 
 # ── Severity arithmetic ─────────────────────────────────────────────────────
@@ -174,10 +187,7 @@ def synthesize_compound_chain(
     # 2) Build steps with OWASP mapping.
     steps: list[ChainStep] = []
     for i, f in enumerate(ordered, start=1):
-        owasp = OWASP_AGENTIC_TOP10.get(
-            f.vuln_class,
-            {"id": "AAI00", "name": "Uncategorised"},
-        )
+        owasp = _owasp_entry_for(f.vuln_class)
         steps.append(ChainStep(
             step=i,
             agent_id=f.agent_id,

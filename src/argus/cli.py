@@ -183,7 +183,7 @@ def _run_live_mcp(args) -> int:
         return 2
 
     print(f"\n  Target     : {_color(la.target or ' '.join(la.server_cmd), BLUE)}")
-    print(f"  Mode       : live MCP attack")
+    print("  Mode       : live MCP attack")
     print(f"  Transport  : {la.transport}")
     print(f"  Auth       : {'set' if la.token else 'none'}")
     print(f"  Output dir : {output_dir}")

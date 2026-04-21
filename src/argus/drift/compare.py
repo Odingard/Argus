@@ -180,15 +180,15 @@ def compare_runs(prior_dir: str, current_dir: str) -> DriftReport:
 def render_drift_text(report: DriftReport) -> str:
     lines: list[str] = []
     lines.append(f"Drift: {report.prior_dir}  →  {report.current_dir}")
-    lines.append(f"")
-    lines.append(f"Findings:")
+    lines.append("")
+    lines.append("Findings:")
     lines.append(f"  ghosts   {len(report.ghost_findings):>4}")
     lines.append(f"  new      {len(report.new_findings):>4}")
     lines.append(f"  changed  {len(report.changed_findings):>4}")
-    lines.append(f"Chains:")
+    lines.append("Chains:")
     lines.append(f"  ghosts   {len(report.ghost_chains):>4}")
     lines.append(f"  new      {len(report.new_chains):>4}")
-    lines.append(f"")
+    lines.append("")
 
     if report.ghost_findings:
         lines.append("Top ghost findings (candidates for 'ghost vulnerability' flag):")

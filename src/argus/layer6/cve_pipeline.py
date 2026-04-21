@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Optional
@@ -336,12 +334,12 @@ def _append_flywheel(
         # Abstract attack pattern — no file paths, no product names
         attack_patterns = [s.achieves for s in chain.steps if s.achieves][:4]
 
-        # Which modalities were effective (from component deviation IDs)
+        # Which modalities were effective. Encoded indirectly via the
+        # hypothesis class that landed the chain; for now keyed off
+        # blast radius.
         effective_modalities: list[str] = []
-        pid = chain.component_deviations[0] if chain.component_deviations else ""
-        # Modality encoded in payload_id indirectly via hypothesis class
         if chain.blast_radius in ("CRITICAL", "HIGH"):
-            effective_modalities = ["schema", "chain"]  # both contributed
+            effective_modalities = ["schema", "chain"]
 
         # Abstract chain pattern — no specific function/file names
         chain_pattern = (
@@ -399,7 +397,7 @@ def run_layer6(
 
     results = L6Output(target=l5_chains.target)
 
-    print(f"\n[L6] CVE Pipeline + Intelligence Flywheel")
+    print("\n[L6] CVE Pipeline + Intelligence Flywheel")
     print(f"     Chains to process: {len(l5_chains.chains)}")
     print(f"     Discovery date   : {discovery_date}")
     print(f"     Disclosure deadline: {deadline}")
@@ -414,7 +412,7 @@ def run_layer6(
         return results
 
     # ── CVE Drafts ────────────────────────────────────────────────────────
-    print(f"\n  [L6-CVE] Generating CVE drafts...")
+    print("\n  [L6-CVE] Generating CVE drafts...")
     cve_drafts: list[CVEDraft] = []
 
     # Prioritize CRITICAL chains, cap at 8 CVE submissions
@@ -438,7 +436,7 @@ def run_layer6(
     results.cve_drafts = cve_drafts
 
     # ── Advisory ──────────────────────────────────────────────────────────
-    print(f"\n  [L6-ADV] Generating security advisory...")
+    print("\n  [L6-ADV] Generating security advisory...")
     advisory_md = _generate_advisory(
         client, l5_chains.chains, cve_drafts,
         l5_chains.target, l1_report, discovery_date, verbose
@@ -464,12 +462,12 @@ def run_layer6(
             "cve_submissions": [asdict(d) for d in cve_drafts]
         }, f, indent=2)
 
-    print(f"         ✓ advisory.md")
-    print(f"         ✓ github_advisory.md")
+    print("         ✓ advisory.md")
+    print("         ✓ github_advisory.md")
     print(f"         ✓ cve_drafts.json ({len(cve_drafts)} CVEs)")
 
     # ── Intelligence Flywheel ─────────────────────────────────────────────
-    print(f"\n  [L6-FLY] Appending to intelligence flywheel...")
+    print("\n  [L6-FLY] Appending to intelligence flywheel...")
     flywheel_entries = _append_flywheel(
         l5_chains.chains, l1_report,
         l5_chains.target, output_dir, discovery_date
@@ -488,7 +486,7 @@ def run_layer6(
     print(f"         📊 Flywheel: {flywheel_path}")
 
     # ── Final summary ─────────────────────────────────────────────────────
-    print(f"\n[L6] Complete")
+    print("\n[L6] Complete")
     print(f"     CVE drafts    : {len(cve_drafts)}")
     print(f"     Advisory      : {adv_path}")
     print(f"     Flywheel      : {total_entries} total entries")

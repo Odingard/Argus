@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator
 
 
 @dataclass

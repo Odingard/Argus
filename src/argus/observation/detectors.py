@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 from argus.observation.verdict import (
-    BehaviorDelta, DeltaKind, Verdict, unchanged,
+    BehaviorDelta, DeltaKind, Verdict,
 )
 
 

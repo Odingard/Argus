@@ -8,7 +8,7 @@ import enum
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
-from typing import Any, Optional
+from typing import Any
 
 
 class ConnectionState(enum.Enum):

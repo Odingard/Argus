@@ -1,7 +1,6 @@
 """tests/test_routing.py — offline tests for the model router."""
 from __future__ import annotations
 
-import os
 
 import pytest
 

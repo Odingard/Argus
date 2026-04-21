@@ -336,7 +336,6 @@ class ModelExtractionAgent(BaseAgent):
         if not post_text:
             return []
         baseline_low = baseline_corpus.lower()
-        post_low     = post_text.lower()
 
         leaked: list[str] = []
         for m in _STRUCTURAL_TOKENS.finditer(post_text):

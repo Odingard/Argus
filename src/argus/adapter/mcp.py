@@ -20,7 +20,6 @@ What it does NOT handle (by design):
 """
 from __future__ import annotations
 
-import asyncio
 from contextlib import AsyncExitStack
 from typing import Optional
 

@@ -4,7 +4,7 @@ argus/observation/engine.py — aggregates detector verdicts.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Protocol
+from typing import Protocol
 
 from argus.observation.verdict import BehaviorDelta, Verdict
 

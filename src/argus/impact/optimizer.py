@@ -22,7 +22,7 @@ Wilson bundles and ALEC envelopes.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from typing import Iterable, Optional
 
 from argus.agents.base import AgentFinding
@@ -171,7 +171,6 @@ def optimize_impact(
 
     for f in findings:
         signals: list[str] = []
-        meta = {}
         # Each finding may carry a `meta.pattern_name` from its verdict;
         # classify the delta_evidence blob for additional shape hits.
         blob = (f.delta_evidence or "") + "\n" + (f.description or "")

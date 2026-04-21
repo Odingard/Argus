@@ -9,7 +9,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from argus.adapter import A2AAdapter, InMemoryA2ABackend, Response
+from argus.adapter import A2AAdapter, InMemoryA2ABackend
 from argus.agents.agent_04_identity_spoof import (
     IdentitySpoofAgent, TECHNIQUES,
 )

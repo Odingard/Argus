@@ -46,7 +46,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from argus.adapter.base import AdapterError, BaseAdapter, Surface
 from argus.agents.base import AgentFinding, BaseAgent
@@ -305,7 +305,7 @@ def _diff_snapshots(
             out.append(_SCHit(
                 technique="SC-T4-version-drift", severity="MEDIUM",
                 where=f"{key[1]}.snapshot",
-                snippet=f"new surface not present in baseline snapshot",
+                snippet="new surface not present in baseline snapshot",
                 pattern_name="snapshot_new_surface",
             ))
         elif base_map[key] != fp:
@@ -323,7 +323,7 @@ def _diff_snapshots(
             out.append(_SCHit(
                 technique="SC-T4-version-drift", severity="MEDIUM",
                 where=f"{key[1]}.snapshot",
-                snippet=f"surface removed since baseline snapshot",
+                snippet="surface removed since baseline snapshot",
                 pattern_name="snapshot_surface_removed",
             ))
     return out

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from argus.adapter.base import AdapterObservation, BaseAdapter, Request
-from argus.session.state import SessionError, SessionState, Turn, utcnow_iso
+from argus.session.state import SessionState, Turn, utcnow_iso
 
 
 class Session:

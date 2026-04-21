@@ -244,7 +244,7 @@ def run_swarm(
     except OSError as e:
         print(f"  [swarm] could not write summary: {e}")
 
-    print(f"\n  [swarm] complete")
+    print("\n  [swarm] complete")
     print(f"    findings   : {len(result['findings'])}")
     print(f"    hot files  : {len(result['hot_files'])}")
     print(f"    hypotheses : {len(result['hypotheses'])}")
