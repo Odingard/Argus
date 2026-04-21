@@ -1135,6 +1135,12 @@ Examples:
     p.add_argument("--flywheel-report",
                    action="store_true",
                    help="Print intelligence flywheel report and exit")
+    p.add_argument("--models",
+                   action="store_true",
+                   help="Probe every configured API key, list models the "
+                        "provider says we can call, and dump rate-limit "
+                        "headers where exposed. Answers 'do I have Gemini "
+                        "access?' etc. No other arguments needed.")
 
     # ── Stateful harness mode ─────────────────────────────────────────────
     p.add_argument("--harness", action="store_true",
@@ -1170,6 +1176,12 @@ Examples:
         flywheel_path = find_flywheel(args.output)
         stats = read_flywheel(flywheel_path)
         print_flywheel_report(stats)
+        return
+
+    # Model inventory mode — probe every provider + print what's available
+    if getattr(args, 'models', False):
+        from argus.inventory import inventory_all, render_inventory_text
+        print(render_inventory_text(inventory_all()))
         return
 
     if not args.live and not args.target:
