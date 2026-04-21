@@ -1,0 +1,18 @@
+# Reference labrat config: a single MCP server target on port 9009.
+# Suitable for smoke-testing Agents 1, 2, 9 against a controlled
+# MCP attack surface.
+name: mcp_only
+description: "Single MCP server target — Phase 0.2 acceptance fixture."
+
+network:
+  isolated: true       # no host-bridge egress; attacks stay inside the lab
+
+services:
+  - name: mcp_target
+    image: python:3.12-slim
+    command: ["python", "-c", "print('replace with real MCP server cmd')"]
+    ports:
+      - "9009:9009"
+    env:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+    restart: "on-failure"
