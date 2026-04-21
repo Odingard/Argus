@@ -180,12 +180,61 @@ def test_http_agent_adapter_payload_shaping_defaults():
     assert shaped2 == {"a": 1, "b": 2}
 
 
-# ── A2A stub ────────────────────────────────────────────────────────────────
+# ── A2A adapter (Phase 2) ───────────────────────────────────────────────────
 
-def test_a2a_adapter_is_stubbed():
+def test_a2a_adapter_requires_backend():
     with pytest.raises(AdapterError) as exc:
-        A2AAdapter(target="anything")
-    assert "Phase-2" in str(exc.value) or "Phase 2" in str(exc.value)
+        A2AAdapter(backend=None)
+    assert "backend" in str(exc.value).lower()
+
+
+def test_a2a_adapter_enumerates_registered_peers():
+    from argus.adapter.a2a import InMemoryA2ABackend
+
+    async def go():
+        backend = InMemoryA2ABackend(
+            peers={"planner": lambda env: "planned",
+                   "executor": lambda env: "done"},
+            descriptions={"planner": "plans things"},
+        )
+        adapter = A2AAdapter(backend=backend)
+        async with adapter:
+            surfaces = await adapter.enumerate()
+        return surfaces
+
+    surfaces = asyncio.run(go())
+    names = {s.name for s in surfaces}
+    assert names == {"handoff:planner", "handoff:executor"}
+
+
+def test_a2a_adapter_routes_envelope_to_peer():
+    from argus.adapter.a2a import InMemoryA2ABackend
+
+    seen = {}
+
+    def planner_handler(envelope):
+        seen.update(envelope)
+        return f"planner ack: {envelope.get('content')}"
+
+    async def go():
+        backend = InMemoryA2ABackend(peers={"planner": planner_handler})
+        adapter = A2AAdapter(backend=backend)
+        async with adapter:
+            obs = await adapter.interact(
+                Request(
+                    surface="handoff:planner",
+                    payload={"from_agent": "user",
+                             "identity":   "user:alice",
+                             "content":    "go"},
+                )
+            )
+        return obs
+
+    obs = asyncio.run(go())
+    assert obs.response.status == "ok"
+    assert "planner ack" in str(obs.response.body)
+    assert seen["from_agent"] == "user"
+    assert seen["to_agent"]   == "planner"
 
 
 # ── Surface shape ──────────────────────────────────────────────────────────
