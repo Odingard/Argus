@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import os
 import re
-import sys
-from pathlib import Path
 
 from argus.agents.base import BaseAgent, AgentFinding
 
@@ -29,6 +27,7 @@ class ExcessiveAgencyAgent(BaseAgent):
     AGENT_NAME = "Excessive Agency Agent"
     VULN_CLASS = "EXCESSIVE_AGENCY"
     TECHNIQUES = ["EA-T1", "EA-T2", "EA-T3"]
+    MAAC_PHASES = [5, 8]  # Tool Misuse + Environment Pivoting
 
     TOOL_PATTERNS = [
         r'@tool', r'def \w+.*shell', r'subprocess\.run', r'os\.system', r'eval\(', r'exec\('
@@ -52,7 +51,7 @@ class ExcessiveAgencyAgent(BaseAgent):
             fn(files, repo_path)
 
         self.save_history(target, output_dir)
-        out = self.save_findings(output_dir)
+        self.save_findings(output_dir)
         print(f"\n  {BOLD}{self.AGENT_ID} complete{RESET} — {len(self.findings)} findings")
         return self.findings
 
