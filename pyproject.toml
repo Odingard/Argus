@@ -24,4 +24,12 @@ authors = [
 ]
 
 [project.scripts]
-argus = "argus.cli:main"
+argus            = "argus.cli:main"
+argus-pre-commit = "argus.integrations.pre_commit:run_pre_commit"
+
+[project.optional-dependencies]
+webhook = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+]

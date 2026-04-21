@@ -1141,6 +1141,16 @@ Examples:
                         "provider says we can call, and dump rate-limit "
                         "headers where exposed. Answers 'do I have Gemini "
                         "access?' etc. No other arguments needed.")
+    p.add_argument("--serve",
+                   action="store_true",
+                   help="Start the ARGUS webhook receiver (FastAPI). "
+                        "POST /scan kicks off a background scan; GET "
+                        "/scan/<id> returns status + ARS. Set "
+                        "ARGUS_WEBHOOK_BEARER in env to require auth.")
+    p.add_argument("--serve-host", default="0.0.0.0",
+                   help="Webhook bind host (default 0.0.0.0)")
+    p.add_argument("--serve-port", type=int, default=8787,
+                   help="Webhook bind port (default 8787)")
 
     # ── Stateful harness mode ─────────────────────────────────────────────
     p.add_argument("--harness", action="store_true",
@@ -1182,6 +1192,12 @@ Examples:
     if getattr(args, 'models', False):
         from argus.inventory import inventory_all, render_inventory_text
         print(render_inventory_text(inventory_all()))
+        return
+
+    # Webhook server mode
+    if getattr(args, 'serve', False):
+        from argus.integrations import run_server
+        run_server(host=args.serve_host, port=args.serve_port)
         return
 
     if not args.live and not args.target:

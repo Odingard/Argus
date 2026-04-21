@@ -1,0 +1,107 @@
+name: "ARGUS Autonomous Red-Team"
+description: "Scan a target repo or MCP endpoint with the ARGUS agentic-AI red-team swarm"
+author: "Odingard Security"
+
+inputs:
+  target:
+    description: "Target to scan (local path, github URL, or MCP server URL with --live)"
+    required: true
+  live:
+    description: "Set to 'true' to run the live MCP attacker instead of the static scan"
+    required: false
+    default: "false"
+  swarm:
+    description: "Set to 'true' to use the coordinated swarm runtime with live correlator"
+    required: false
+    default: "true"
+  skip-layer:
+    description: "Space-separated layer numbers to skip (e.g. '7' to skip the docker sandbox)"
+    required: false
+    default: "7"
+  output-dir:
+    description: "Where to write results/ inside the runner"
+    required: false
+    default: "argus-results"
+  fail-on-ars:
+    description: "Fail the job if any chain's ARS score exceeds this threshold (0-100). 0 = never fail."
+    required: false
+    default: "85"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install ARGUS
+      shell: bash
+      run: |
+        pip install --upgrade pip
+        pip install argus-redteam
+
+    - name: Run ARGUS scan
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ env.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY:    ${{ env.OPENAI_API_KEY }}
+        GEMINI_API_KEY:    ${{ env.GEMINI_API_KEY }}
+      run: |
+        set -e
+        flags=""
+        if [ "${{ inputs.live }}" = "true" ]; then flags="$flags --live"; fi
+        if [ "${{ inputs.swarm }}" = "true" ]; then flags="$flags --swarm"; fi
+        if [ -n "${{ inputs.skip-layer }}" ]; then flags="$flags --skip-layer ${{ inputs.skip-layer }}"; fi
+        argus "${{ inputs.target }}" -o "${{ inputs.output-dir }}" $flags
+
+    - name: Upload ARGUS results artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: argus-results
+        path: ${{ inputs.output-dir }}/
+
+    - name: Gate on ARS threshold
+      shell: bash
+      run: |
+        python - <<'PY'
+        import json, os, sys
+        from pathlib import Path
+        threshold = int("${{ inputs.fail-on-ars }}" or "0")
+        if threshold <= 0:
+            print("[argus-action] ARS gating disabled (threshold <= 0)")
+            sys.exit(0)
+
+        l5 = Path("${{ inputs.output-dir }}") / "layer5.json"
+        if not l5.exists():
+            print("[argus-action] no layer5.json — nothing to gate")
+            sys.exit(0)
+
+        try:
+            from argus.shared.ars import score_chain
+        except ImportError:
+            print("[argus-action] argus.shared.ars not importable; skipping gate")
+            sys.exit(0)
+
+        data = json.loads(l5.read_text())
+        worst = 0
+        for c in data.get("chains", []):
+            b = score_chain(
+                blast_radius=c.get("blast_radius", "MEDIUM"),
+                is_validated=bool(c.get("is_validated", False)),
+                combined_score=float(c.get("combined_score", 0.5)),
+                entry_point=c.get("entry_point", "unknown"),
+                preconditions_count=len(c.get("preconditions", []) or []),
+            )
+            worst = max(worst, b.score)
+            if b.score >= threshold:
+                print(f"[argus-action] GATE FAIL: chain {c.get('chain_id')} "
+                      f"scored ARS={b.score} (threshold {threshold})")
+        if worst >= threshold:
+            sys.exit(2)
+        print(f"[argus-action] PASS: worst ARS was {worst} (threshold {threshold})")
+        PY
+
+branding:
+  icon: "shield"
+  color: "red"
