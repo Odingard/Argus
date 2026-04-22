@@ -174,12 +174,15 @@ def _dispatch_github(repo: dict, *, workdir: Path) -> Dispatch:
             )
     detected = _detect_launch_command(dest)
     if detected is None:
+        hint = _framework_hint(dest)
         return Dispatch(
             action="fail",
-            reason=(f"cloned {repo['clone_url']} to {dest} but could "
-                    f"not identify a runnable MCP server command. "
-                    f"Inspect the repo's README and pass the launch "
-                    f"command directly: `argus mcp <cmd> <args...>`."),
+            reason=(f"cloned {repo['clone_url']} but could not find "
+                    f"a runnable MCP server command.{hint}\n\n"
+                    f"    • If this is a live deployment, point ARGUS "
+                    f"at the URL:  argus https://your-app/api/sse\n"
+                    f"    • If you have a launch command, pass it "
+                    f"directly:    argus mcp <cmd> <args...>"),
         )
     encoded = "+".join(detected).replace(" ", "+")
     return Dispatch(
@@ -300,22 +303,26 @@ def _detect_launch_command(repo_dir: Path) -> Optional[list[str]]:
         except json.JSONDecodeError:
             pass
 
-    # 2) package.json — ``bin`` entry pointing at something mcp-ish.
+    # 2) package.json — only dispatch via npx if the package declares
+    # a runnable ``bin`` entry. A package with no bin (e.g. library
+    # adapters like vercel/mcp-handler or openai/agents) can't be
+    # launched standalone — npx -y against it will fail at startup
+    # because the library expects to be imported into a host app.
     pkg_json = repo_dir / "package.json"
     if pkg_json.is_file():
         try:
             pj = json.loads(pkg_json.read_text(encoding="utf-8"))
             name = pj.get("name") or ""
-            # If the package is published + mentions mcp, npx is the
-            # cleanest dispatch.
-            if "mcp" in name.lower() or "server" in name.lower():
-                return ["npx", "-y", name]
             bin_section = pj.get("bin")
             if isinstance(bin_section, dict) and bin_section:
                 first_bin = next(iter(bin_section))
                 return ["npx", "-y", name or first_bin]
             if isinstance(bin_section, str) and name:
                 return ["npx", "-y", name]
+            # No bin — it's a library/framework, not a server.
+            # Let the other detectors try (README hint, entrypoint
+            # file); if they all fail, the dispatcher emits a
+            # helpful framework-vs-server message.
         except json.JSONDecodeError:
             pass
 
@@ -359,6 +366,50 @@ _HINT_RE = re.compile(
     r"((?:npx|uvx|pipx|python|node)\s+[^\n]+)\n",
     re.IGNORECASE,
 )
+
+
+def _framework_hint(repo_dir: Path) -> str:
+    """Recognise common framework/library patterns and return a
+    human-readable hint explaining why the target can't be launched
+    standalone. Empty string when the repo isn't a known framework."""
+    pkg_json = repo_dir / "package.json"
+    if pkg_json.is_file():
+        try:
+            pj = json.loads(pkg_json.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return ""
+        peer = pj.get("peerDependencies") or {}
+        name = (pj.get("name") or "").lower()
+        bin_section = pj.get("bin")
+        has_bin = bool(bin_section)
+
+        # Framework adapters declare peer deps on the host framework.
+        host_peers = set(peer) & {
+            "next", "nuxt", "@nestjs/core", "express", "fastify",
+            "@sveltejs/kit", "react", "vue",
+        }
+        if host_peers and not has_bin:
+            hosts = ", ".join(sorted(host_peers))
+            return (f" This looks like a FRAMEWORK ADAPTER — it's "
+                    f"imported into a host app ({hosts}), not run "
+                    f"standalone.")
+
+        # Name contains handler/adapter/sdk/client/lib → library shape.
+        if not has_bin and any(s in name for s in (
+            "handler", "adapter", "sdk", "-client", "-lib",
+        )):
+            return (" This looks like a LIBRARY (no bin entry in "
+                    "package.json) — ARGUS can't launch it as a "
+                    "standalone MCP server.")
+
+    pyproj = repo_dir / "pyproject.toml"
+    if pyproj.is_file():
+        text = pyproj.read_text(encoding="utf-8", errors="replace")
+        if "[project.scripts]" not in text and "entry_points" not in text:
+            return (" This Python project declares no console scripts "
+                    "or entry points — ARGUS can't launch it as a "
+                    "standalone MCP server.")
+    return ""
 
 
 def _first_launch_hint(readme: str) -> Optional[list[str]]:

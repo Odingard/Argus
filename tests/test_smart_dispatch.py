@@ -138,6 +138,48 @@ def test_detect_launch_from_package_json_with_mcp_name(tmp_path):
     ]
 
 
+def test_detect_launch_skips_package_without_bin(tmp_path):
+    """vercel/mcp-handler pattern — 'mcp' in name, no `bin` entry.
+    It's a LIBRARY, not a runnable server; detector must return None
+    so the dispatcher falls through to README / entrypoint / fail."""
+    (tmp_path / "package.json").write_text(json.dumps({
+        "name": "mcp-handler",
+        "main": "./dist/index.js",
+        "peerDependencies": {"next": "^15"},
+    }))
+    assert _detect_launch_command(tmp_path) is None
+
+
+def test_framework_hint_detects_nextjs_adapter(tmp_path):
+    from argus.engagement.smart import _framework_hint
+    (tmp_path / "package.json").write_text(json.dumps({
+        "name": "mcp-handler",
+        "peerDependencies": {"next": "^15", "nuxt": "^3"},
+    }))
+    hint = _framework_hint(tmp_path)
+    assert "FRAMEWORK ADAPTER" in hint
+    assert "next" in hint
+
+
+def test_framework_hint_detects_library_shape(tmp_path):
+    from argus.engagement.smart import _framework_hint
+    (tmp_path / "package.json").write_text(json.dumps({
+        "name": "some-mcp-sdk",
+        "main": "./lib/index.js",
+    }))
+    hint = _framework_hint(tmp_path)
+    assert "LIBRARY" in hint
+
+
+def test_framework_hint_silent_on_runnable_package(tmp_path):
+    from argus.engagement.smart import _framework_hint
+    (tmp_path / "package.json").write_text(json.dumps({
+        "name": "my-server",
+        "bin":  {"my-server": "./bin/run"},
+    }))
+    assert _framework_hint(tmp_path) == ""
+
+
 def test_detect_launch_from_pyproject(tmp_path):
     (tmp_path / "pyproject.toml").write_text(
         '[project]\n'
