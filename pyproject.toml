@@ -40,3 +40,14 @@ webhook = [
     "uvicorn[standard]>=0.29",
     "pydantic>=2.6",
 ]
+
+# ── Ruff config ────────────────────────────────────────────────────────────
+# We keep ruff's default rule set but waive the two "multiple
+# statements on one line" rules — we use that style intentionally in
+# compact test helpers and CLI dispatch tables. Everything else stays
+# strict.
+[tool.ruff.lint]
+ignore = [
+    "E701",   # multiple statements on one line (colon)
+    "E702",   # multiple statements on one line (semicolon)
+]

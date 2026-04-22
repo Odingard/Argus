@@ -86,7 +86,12 @@ jobs:
       - name: Install project
         run: pip install -e .
       - name: Audit
-        run: pip-audit --progress-spinner off --strict
+        # --skip-editable silences the cosmetic "argus-redteam (editable)
+        # not on PyPI" warning. We intentionally drop --strict here —
+        # --strict + --skip-editable conflict (strict fails on the
+        # skipped editable). The run still fails on any real CVE in
+        # the third-party dep tree.
+        run: pip-audit --progress-spinner off --skip-editable
 
   detect-secrets:
     name: detect-secrets
