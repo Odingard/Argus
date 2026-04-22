@@ -483,9 +483,47 @@ def main() -> int:
         print(f"unknown --demo: {args.demo}")
         return 2
 
-    # Default: no subcommand selected → Phase 0 migration notice.
+    # Smart dispatcher — if the operator supplied a positional
+    # target, figure out what it is (URL / GitHub / npm / pip /
+    # local path / report dir) and do the right thing.
+    if args.target:
+        from argus.engagement import dispatch, describe, run_engagement
+        d = dispatch(args.target)
+        print(f"  {GRAY}{describe(d)}{RESET}")
+        if not d.ok():
+            return 2
+        if d.action == "report":
+            from argus.report import render_html_from_dir
+            rr = render_html_from_dir(d.target)
+            print(f"  {GREEN}✓{RESET} report.html → {rr.output_path} "
+                  f"(severity {rr.severity}, harm {rr.harm_score})")
+            return 0
+        # action == "engage"
+        out = args.output
+        if out == "results/":
+            out = "results/" + _target_slug(d.target)
+        result = run_engagement(
+            target_url=d.target,
+            output_dir=out, clean=args.engage_clean,
+            verbose=args.verbose,
+        )
+        if result.findings:
+            from argus.report import render_html_from_dir
+            rr = render_html_from_dir(result.artifact_root)
+            print(f"  {GREEN}✓{RESET} report.html → {rr.output_path}")
+        return 0 if result.findings else 2
+
+    # No positional → Phase 0 migration notice.
     print(PHASE_0_NOTICE)
     return 2
+
+
+def _target_slug(url: str) -> str:
+    """Safe output-dir name derived from a target URL."""
+    import re as _re
+    core = url.split("://", 1)[1] if "://" in url else url
+    slug = _re.sub(r"[^A-Za-z0-9._-]+", "-", core).strip("-")[:80]
+    return slug or "engagement"
 
 
 if __name__ == "__main__":
