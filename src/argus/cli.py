@@ -285,14 +285,15 @@ def main() -> int:
                    help="Cumulative per-agent entitlement drift across runs")
 
     p.add_argument("--demo", default=None, metavar="NAME",
-                   choices=["generic-agent", "evolver"],
+                   choices=["generic-agent", "evolver", "crewai"],
                    help=("Run a packaged end-to-end demo. Options: "
                          "'generic-agent' (attacks a "
                          "lsdefine/GenericAgent-class labrat and "
                          "emits the full artifact package); "
                          "'evolver' (Pillar-2 Raptor Cycle — "
                          "MAP-Elites evolution of the corpus with "
-                         "elite promotion)."))
+                         "elite promotion); 'crewai' (8-agent "
+                         "swarm against a crewAI-class labrat)."))
     p.add_argument("--demo-clean", action="store_true",
                    help="Wipe the demo output directory before running")
     p.add_argument("--demo-generations", type=int, default=12,
@@ -359,6 +360,15 @@ def main() -> int:
                 output_dir=out, verbose=args.verbose,
                 clean=args.demo_clean,
                 generations=args.demo_generations,
+            )
+        if args.demo == "crewai":
+            from argus.demo import run_crewai
+            out = args.output
+            if out == "results/":
+                out = "results/demo/crewai"
+            return run_crewai(
+                output_dir=out, verbose=args.verbose,
+                clean=args.demo_clean,
             )
         print(f"unknown --demo: {args.demo}")
         return 2

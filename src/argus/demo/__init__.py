@@ -21,7 +21,8 @@ add ``vercel_breach`` (OAuth supply-chain), ``parlant_guideline``
 (governance harness), and ``hermes_mcp`` (personal-to-enterprise
 pivot).
 """
+from argus.demo.crewai import run as run_crewai
 from argus.demo.evolver import run as run_evolver
 from argus.demo.generic_agent import run as run_generic_agent
 
-__all__ = ["run_generic_agent", "run_evolver"]
+__all__ = ["run_generic_agent", "run_evolver", "run_crewai"]
