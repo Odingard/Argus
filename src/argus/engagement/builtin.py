@@ -102,11 +102,44 @@ def _mcp_factory(url: str):
 register_target(
     "mcp",
     factory=_mcp_factory,
-    description="Live MCP server (SSE or stdio bridge).",
+    description="Live MCP server over SSE (HTTP transport).",
     # MCP targets often don't have memory:* surfaces — let MP-03
     # skip silently — or handoff surfaces. Narrow.
     agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
                      "PE-07", "EP-11"),
+)
+
+
+def _stdio_mcp_factory(url: str):
+    """
+    Live MCP server over stdio transport. The URL form encodes the
+    subprocess command after the scheme:
+
+        stdio-mcp://python+-m+argus.labrat.mcp_server
+
+    The '+' characters are decoded to spaces (URLs can't carry
+    spaces cleanly). When the URL is just ``stdio-mcp://labrat`` we
+    launch the bundled argus.labrat.mcp_server — the canonical real-
+    MCP demo target.
+    """
+    from argus.adapter import StdioAdapter
+
+    body = url.split("://", 1)[1] if "://" in url else url
+    if body in ("", "labrat", "default"):
+        command = ["python", "-m", "argus.labrat.mcp_server"]
+    else:
+        command = [seg for seg in body.replace("+", " ").split(" ") if seg]
+    return StdioAdapter(command=command)
+
+
+register_target(
+    "stdio-mcp",
+    factory=_stdio_mcp_factory,
+    description="Live MCP server over stdio transport "
+                "(default: bundled argus.labrat.mcp_server).",
+    agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
+                     "PE-07", "EP-11"),
+    aliases=("mcp-stdio",),
 )
 
 
