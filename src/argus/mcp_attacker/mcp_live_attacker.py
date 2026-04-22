@@ -532,7 +532,11 @@ async def protocol_attack(
     if token:
         headers["Authorization"] = token
 
-    async with httpx.AsyncClient(timeout=8.0, verify=False) as client:
+    # verify=False is intentional: this is an offensive probe against
+    # MCP endpoints that commonly serve self-signed certs on localhost /
+    # pre-prod. Skipping cert validation lets us reach those targets
+    # during pentest engagements. NOT appropriate in defender code.
+    async with httpx.AsyncClient(timeout=8.0, verify=False) as client:  # nosec B501
         # Test 1: Unauthenticated access
         print(f"  {BLUE}→{RESET} Testing unauthenticated access")
         try:
@@ -844,7 +848,9 @@ If no meaningful chains: {{"chains": []}}"""
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _fid(raw: str) -> str:
-    return hashlib.md5(raw.encode()).hexdigest()[:8]
+    return hashlib.md5(
+        raw.encode(), usedforsecurity=False,
+    ).hexdigest()[:8]
 
 
 def _print_summary(report: MCPAttackReport) -> None:

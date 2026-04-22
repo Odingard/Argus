@@ -102,9 +102,12 @@ class AgentFinding:
                 f"got {type(verdict).__name__}"
             )
 
+        # MD5 here is a fingerprint, not a security primitive —
+        # usedforsecurity=False to suppress B324.
         fid = finding_id or hashlib.md5(
             f"{agent_id}|{verdict.detector}|{surface}|"
-            f"{attack_variant_id}|{verdict.evidence}".encode()
+            f"{attack_variant_id}|{verdict.evidence}".encode(),
+            usedforsecurity=False,
         ).hexdigest()[:12]
 
         return cls(
@@ -163,7 +166,8 @@ class BaseAgent(ABC):
         self.client    = ArgusClient()
         self.findings: list[AgentFinding] = []
         self.scan_id   = hashlib.md5(
-            f"{self.AGENT_ID}{datetime.now().isoformat()}".encode()
+            f"{self.AGENT_ID}{datetime.now().isoformat()}".encode(),
+            usedforsecurity=False,
         ).hexdigest()[:8]
         self._start_time = datetime.now()
 
@@ -183,7 +187,10 @@ class BaseAgent(ABC):
     # ── Shared helpers ─────────────────────────────────────────────────────
 
     def _fid(self, raw: str) -> str:
-        return hashlib.md5(f"{self.AGENT_ID}{raw}".encode()).hexdigest()[:8]
+        return hashlib.md5(
+            f"{self.AGENT_ID}{raw}".encode(),
+            usedforsecurity=False,
+        ).hexdigest()[:8]
 
     def _haiku(self, prompt: str, max_tokens: int = 2000) -> dict:
         # Prepend persona bias when the subclass declared one. Cheap,

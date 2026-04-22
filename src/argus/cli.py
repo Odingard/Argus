@@ -113,7 +113,10 @@ def _run_harness_mode(args) -> int:
         return 2
     mod_name, attr_name = target.split(":", 1)
     try:
-        mod = importlib.import_module(mod_name)
+        # Operator-provided module path is the whole point of --harness
+        # (it's the target under test). The caller controls the arg;
+        # there's no untrusted-input injection surface.
+        mod = importlib.import_module(mod_name)  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
         target_fn = getattr(mod, attr_name)
     except (ImportError, AttributeError) as e:
         print(f"  {_color('✗', SEV_COLORS['CRITICAL'])} "

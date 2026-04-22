@@ -97,7 +97,10 @@ def build_app():
     return app
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8787) -> None:
+def run_server(host: str = "127.0.0.1", port: int = 8787) -> None:
+    # Default bind is loopback only — an operator intentionally
+    # exposing the webhook passes host="0.0.0.0" (and is responsible
+    # for placing it behind auth + TLS).
     try:
         import uvicorn
     except ImportError as e:

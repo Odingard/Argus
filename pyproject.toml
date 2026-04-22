@@ -18,7 +18,13 @@ dependencies = [
     "networkx",
     "mcp",
     "docker",
-    "pyyaml"
+    "pyyaml",
+    # Security floor pins — block the known-vulnerable transitive
+    # versions surfaced by pip-audit 2026-04-21 from reappearing on a
+    # fresh install.
+    "cryptography>=46.0.7",   # CVE-2026-34073, CVE-2026-39892
+    "lxml>=6.1.0",            # CVE-2026-41066
+    "pygments>=2.20.0",       # CVE-2026-4539
 ]
 authors = [
   { name="ARGUS Defense", email="security@sixsenseenterprise.com" }

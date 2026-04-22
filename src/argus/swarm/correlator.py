@@ -440,4 +440,6 @@ class LiveCorrelator:
     @staticmethod
     def _cluster_fingerprint(cluster: list[AgentFinding]) -> str:
         ids = sorted(f.id for f in cluster)
-        return "hyp-" + hashlib.md5("|".join(ids).encode()).hexdigest()[:10]
+        return "hyp-" + hashlib.md5(
+            "|".join(ids).encode(), usedforsecurity=False,
+        ).hexdigest()[:10]
