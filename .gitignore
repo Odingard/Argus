@@ -12,3 +12,5 @@ build/
 phase-*.json
 plan.md
 results/
+.claude/
+argus-targets/
