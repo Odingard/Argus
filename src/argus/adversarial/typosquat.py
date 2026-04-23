@@ -233,7 +233,13 @@ def _safe_get_json(url: str, *, timeout: float) -> Optional[dict]:
         url, headers={"Accept": "application/json",
                       "User-Agent": "argus-typosquat/1"},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310 — scheme gated above
+    # Scheme allow-listed above to https:// — urlopen cannot be
+    # redirected to file://. Suppress Bandit B310 + Semgrep's
+    # generic urllib audit; both fire on the call-site pattern and
+    # don't see the guard.
+    with urllib.request.urlopen(  # nosec B310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+        req, timeout=timeout,
+    ) as r:
         if r.status != 200:
             return None
         body = r.read().decode("utf-8", errors="replace")
