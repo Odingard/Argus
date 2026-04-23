@@ -22,7 +22,7 @@ ARGUS is uniquely built as an 11-Agent Swarm.
 This Open-Source core implements the basic scaffolding of the **Attack Layer**. It provides the entry-point logic to spawn short-lived, narrowly scoped agents designed to hunt AI logic flaws without accumulated bias or context collapse. 
 
 ```bash
-pip install argus-redteam
+pip install argus-core
 ```
 
 ### One-line engagement

@@ -36,7 +36,7 @@ def build_app():
     except ImportError as e:
         raise RuntimeError(
             "FastAPI / pydantic not installed. "
-            "Install with: pip install 'argus-redteam[webhook]' "
+            "Install with: pip install 'argus-core[webhook]' "
             "or `pip install fastapi pydantic 'uvicorn[standard]'`"
         ) from e
 
@@ -106,7 +106,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8787) -> None:
     except ImportError as e:
         raise RuntimeError(
             "uvicorn not installed. Install with: "
-            "pip install 'argus-redteam[webhook]' "
+            "pip install 'argus-core[webhook]' "
             "or `pip install fastapi pydantic 'uvicorn[standard]'`"
         ) from e
     app = build_app()
@@ -200,6 +200,6 @@ def _run_scan_job(job: Job, req) -> None:
 def _argus_version() -> str:
     try:
         from importlib.metadata import version
-        return version("argus-redteam")
+        return version("argus-core")
     except Exception:
         return "dev"

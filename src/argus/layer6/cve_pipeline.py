@@ -261,7 +261,7 @@ def _generate_advisory(
 
 **Reporter:** {REPORTER_ORG}  
 **Contact:** andre.byrd@odingard.com  
-**Discovery method:** ARGUS Red Team Platform (`pip install argus-redteam`)  
+**Discovery method:** ARGUS Red Team Platform (`pip install argus-core`)
 **Date:** {discovery_date}  
 **Disclosure deadline:** {deadline} (90 days)
 
@@ -295,7 +295,7 @@ def _generate_advisory(
 Odingard Security is a veteran-founded, AI-native cybersecurity company.
 ARGUS is an autonomous AI red team platform for agentic AI and MCP systems.
 
-`pip install argus-redteam` | github.com/Odingard/Argus
+`pip install argus-core` | github.com/Odingard/argus-core
 """
     return advisory_md
 

@@ -39,7 +39,7 @@ runs:
       shell: bash
       run: |
         pip install --upgrade pip
-        pip install argus-redteam
+        pip install argus-core
 
     - name: Run ARGUS scan
       shell: bash

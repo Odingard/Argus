@@ -135,7 +135,7 @@ anthropic files create --purpose fine-tune \\
 anthropic fine-tuning jobs create \\
   --training-file <file_id> \\
   --model claude-haiku-4-5-20251001 \\
-  --suffix argus-redteam
+  --suffix argus-core
 ```
 
 ## 2. OpenAI fine-tune (for cross-provider training)

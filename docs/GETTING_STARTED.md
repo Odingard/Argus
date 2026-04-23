@@ -9,7 +9,7 @@ no LLM keys, no Docker**.
 ## 1. Install
 
 ```bash
-pip install argus-redteam
+pip install argus-core
 ```
 
 Verify:

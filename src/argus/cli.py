@@ -45,7 +45,7 @@ BANNER = r"""
  ██╔══██║██╔══██╗██║   ██║██║   ██║╚════██║
  ██║  ██║██║  ██║╚██████╔╝╚██████╔╝███████║
  ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝
-   Autonomous AI Red Team  ·  Phase 0 rebuild in progress
+   Autonomous AI Red Team Platform
    Odingard Security  ·  Six Sense Enterprise Services
 """
 
@@ -66,32 +66,32 @@ def _color(text: str, color: str) -> str:
     return f"{color}{text}{RESET}"
 
 
-# ── Phase 0 migration notice (default mode) ──────────────────────────────────
+# ── Default welcome (shown when `argus` is run without a target) ─────────────
 
-PHASE_0_NOTICE = f"""
-{BOLD}ARGUS — Phase 0 rebuild in progress{RESET}
+WELCOME = f"""
+{BOLD}ARGUS — Autonomous AI Red Team Platform{RESET}
 
-The static source-code scanner pipeline (L1–L7) shipped pre-2026-04-21
-was the wrong product vs. the original Build-folder spec. It has been
-archived to {BOLD}legacy/{RESET} and the codebase is being rebuilt as an
-autonomous offensive platform against LIVE AI deployments.
+Engage a live target in one command — ARGUS auto-detects the input type:
 
-See {BOLD}PHASES.md{RESET} at the repo root for the full plan. Running
-{BOLD}argus <target>{RESET} in scan mode is intentionally disabled until
-the Phase 0 Target Adapter + Session + Observation substrate lands
-(Tickets 0.2 – 0.7).
+  {BOLD}argus <mcp-url>{RESET}                        live MCP over SSE / HTTP
+  {BOLD}argus github.com/owner/repo{RESET}            clone + engage
+  {BOLD}argus @scope/pkg{RESET}                       npx-launched stdio MCP
+  {BOLD}argus ./path/to/server.py{RESET}              local file / folder
+  {BOLD}argus crewai:// | autogen:// | ...{RESET}     labrat fixtures
+  {BOLD}argus --list-targets{RESET}                   show every registered scheme
 
-{BOLD}Working subcommands today:{RESET}
-  argus --models                         inventory provider keys + quotas
-  argus --flywheel-report                intelligence-flywheel stats
-  argus --harness pkg.mod:fn             deterministic harness against a target callable
-  argus --live <mcp-url>                 live MCP protocol attack (preview)
-  argus --live --transport stdio -- CMD  live MCP over stdio
-  argus --drift PRIOR_DIR                diff current output vs prior scan
-  argus --entitlements RUN_DIR ...       cumulative agent-entitlement drift
-  argus --serve                          webhook receiver (FastAPI)
+Operational helpers:
 
-Exit code 2 to make CI pipelines fail loud until Phase 0 lands.
+  {BOLD}argus --models{RESET}                         probe provider keys + quotas
+  {BOLD}argus --harness pkg.mod:fn{RESET}             deterministic multi-turn replay
+  {BOLD}argus --drift PRIOR_DIR{RESET}                diff vs a prior run
+  {BOLD}argus --entitlements RUN ...{RESET}           cumulative agent-entitlement drift
+  {BOLD}argus --serve{RESET}                          FastAPI webhook receiver
+  {BOLD}argus --sandbox <target>{RESET}               docker-isolate the target process
+  {BOLD}argus --typosquat <pkg>{RESET}                scan npm/PyPI for lookalikes
+  {BOLD}argus --report RUN_DIR{RESET}                 render HTML report
+
+Docs:  https://github.com/Odingard/argus-core
 """
 
 
@@ -240,18 +240,23 @@ def _run_entitlements(args) -> int:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> int:
+    from argus import __version__
     p = argparse.ArgumentParser(
         description=(
             "ARGUS — Autonomous AI Red Team Platform. "
-            "Phase 0 rebuild per PHASES.md: the static-scan pipeline is "
-            "archived in legacy/; live-runtime agents land in Phase 1+."
+            "One-input dispatch: pass a URL, GitHub repo, npm/PyPI "
+            "package, local path, or engagement directory and ARGUS "
+            "routes it to the right engagement."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    p.add_argument("--version", action="version",
+                   version=f"argus-core {__version__}")
     p.add_argument("target", nargs="?", default=None,
-                   help=("Target (MCP server URL with --live, harness "
-                         "target with --harness). Scan-mode is disabled "
-                         "during Phase 0 — see PHASES.md."))
+                   help=("What to engage. Accepts MCP URLs, GitHub repos, "
+                         "npm/PyPI packages, local scripts, or engagement "
+                         "directories; use --list-targets to see all "
+                         "registered schemes."))
     p.add_argument("-o", "--output", default="results/",
                    help="Output directory (default: results/)")
     p.add_argument("--verbose", action="store_true")
@@ -617,9 +622,9 @@ def main() -> int:
             print(f"  {GREEN}✓{RESET} report.html → {rr.output_path}")
         return 0 if result.findings else 2
 
-    # No positional → Phase 0 migration notice.
-    print(PHASE_0_NOTICE)
-    return 2
+    # No positional → welcome / usage landing.
+    print(WELCOME)
+    return 0
 
 
 def _target_slug(url: str) -> str:

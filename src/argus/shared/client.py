@@ -1,7 +1,17 @@
 import os
+import warnings
+
 import anthropic
 import openai
-import google.generativeai as genai
+
+# google.generativeai is deprecated in favour of google.genai and emits
+# a multi-paragraph FutureWarning on import. The migration is a whole-
+# library refactor tracked separately; until then, suppress the banner
+# so argus doesn't print a warning to every operator on every run.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    import google.generativeai as genai
+
 from dotenv import load_dotenv
 
 load_dotenv(override=True)

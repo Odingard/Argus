@@ -86,7 +86,7 @@ jobs:
       - name: Install project
         run: pip install -e .
       - name: Audit
-        # --skip-editable silences the cosmetic "argus-redteam (editable)
+        # --skip-editable silences the cosmetic "argus-core (editable)
         # not on PyPI" warning. We intentionally drop --strict here —
         # --strict + --skip-editable conflict (strict fails on the
         # skipped editable). The run still fails on any real CVE in
