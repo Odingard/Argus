@@ -189,7 +189,15 @@ def _run_live_mcp(args) -> int:
     la.token      = args.token
     la.output     = output_dir
     la.verbose    = args.verbose
-    la.server_cmd = args.server_cmd or []
+    # For stdio transport, `argus --live --transport stdio -- npx -y pkg /path`
+    # parses as target='npx', server_cmd=['-y', 'pkg', '/path']. Prepend the
+    # launcher so the subprocess exec gets the full argv. SSE transport uses
+    # `target` as the URL, so we skip the join there.
+    if la.transport == "stdio" and args.target:
+        la.server_cmd = [args.target] + (args.server_cmd or [])
+        la.target = None
+    else:
+        la.server_cmd = args.server_cmd or []
 
     if la.transport == "stdio" and not la.server_cmd:
         print(f"  {_color('✗ --transport stdio requires -- <server command>', SEV_COLORS['CRITICAL'])}")

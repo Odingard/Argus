@@ -845,6 +845,173 @@ If no meaningful chains: {{"chains": []}}"""
     return findings
 
 
+# ── Calibration pass ──────────────────────────────────────────────────────────
+#
+# A naïve single-LLM grader produces signal-dense slop: 40 findings that
+# are really one behaviour repeated 40 times, graded HIGH because Haiku
+# has no calibration signal. The calibrator runs after every phase has
+# contributed findings and before the report is written. Three sub-passes:
+#
+#   (1) Scope-enforcement guard. If the server's raw_response looks like
+#       an access-denied / path-rejected response AND the finding was
+#       classed as TRACE_LATERAL / AUTH_BYPASS, the scope enforcement is
+#       actually WORKING — the real issue is that the error message
+#       echoed the attacker's payload. Downgrade to MEDIUM, re-title as
+#       an error-reflection concern, re-class as TRACE_LATERAL but mark
+#       `reflection_only` in the observed_behavior.
+#
+#   (2) SCHEMA severity cap. A SCHEMA-phase finding rests on a single
+#       Haiku verdict about whether the response "looks exploited." That
+#       is not the bar for HIGH+. Cap SCHEMA-only findings at MEDIUM
+#       unless another phase (PROTO / TOOL-FUZZ / RESOURCE) produced a
+#       corroborating finding for the same tool.
+#
+#   (3) Dedupe by (vuln_class, response fingerprint). The
+#       "error-reflection across every tool" pattern is one issue, not
+#       N. Collapse findings with the same normalised response shape
+#       into a single representative with `occurrences` metadata.
+
+_SCOPE_ENFORCED_PATTERNS = [
+    "access denied",
+    "permission denied",
+    "outside allowed",
+    "not in allowed",
+    "not allowed",
+    "path not permitted",
+    "is not within",
+    "not a valid path",
+    "must be absolute",
+    "authorized",   # matches "not authorized", "unauthorized" responses
+    "forbidden",
+    "error: enoent",
+]
+
+_SCOPE_ENFORCED_CLASSES = {"TRACE_LATERAL", "AUTH_BYPASS", "SSRF"}
+
+
+def _scope_enforced(raw_response: Optional[str]) -> bool:
+    if not raw_response:
+        return False
+    low = raw_response.lower()
+    return any(p in low for p in _SCOPE_ENFORCED_PATTERNS)
+
+
+def _fingerprint_response(raw_response: Optional[str],
+                          tool_name: str) -> str:
+    """Normalised shape of an error/response, tool-agnostic so the same
+    pattern across different tools collapses."""
+    if not raw_response:
+        return "empty"
+    s = raw_response.lower()
+    # Strip tool-specific and path-specific tokens so we match on
+    # SHAPE, not on identifying details.
+    s = s.replace(tool_name.lower(), "<tool>")
+    # Collapse whitespace + strip digits / paths.
+    import re as _re
+    s = _re.sub(r"/[^\s\"']{3,}", "<path>", s)
+    s = _re.sub(r"\s+", " ", s).strip()
+    return hashlib.md5(s[:200].encode(),
+                       usedforsecurity=False).hexdigest()[:10]
+
+
+def _calibrate_findings(
+    findings: list["MCPFinding"],
+) -> list["MCPFinding"]:
+    """Post-processing pass — scope-guard, SCHEMA cap, dedupe.
+
+    Pure function: no LLM calls, no network. Deterministic so a
+    repeated run produces the same calibrated output."""
+    if not findings:
+        return findings
+
+    # Tool-names that had a corroborating non-SCHEMA finding — these
+    # are allowed to keep HIGH+ on SCHEMA findings too.
+    corroborated: set[str] = {
+        f.tool_name for f in findings
+        if f.phase and f.phase != "SCHEMA"
+    }
+
+    out: list[MCPFinding] = []
+    for f in findings:
+        sev = f.severity
+        title = f.title
+        observed = f.observed_behavior or ""
+
+        # (1) Scope-enforcement guard
+        if (f.vuln_class in _SCOPE_ENFORCED_CLASSES
+                and _scope_enforced(f.raw_response)):
+            if sev in ("CRITICAL", "HIGH"):
+                sev = "MEDIUM"
+            observed = (
+                "[reflection_only] server enforced scope; concern is "
+                "adversarial payload echoed in error — "
+                + observed[:300]
+            ).strip()
+            title = (
+                "Adversarial payload reflected in rejection error "
+                "(downstream prompt-injection vector)"
+            )
+
+        # (2) SCHEMA severity cap
+        if (f.phase == "SCHEMA"
+                and sev in ("CRITICAL", "HIGH")
+                and f.tool_name not in corroborated):
+            sev = "MEDIUM"
+            observed = (
+                "[schema_only:capped] single-judge SCHEMA verdict; "
+                "runtime corroboration required for HIGH+ — "
+                + observed[:300]
+            ).strip()
+
+        out.append(MCPFinding(
+            id=f.id, phase=f.phase,
+            severity=sev, vuln_class=f.vuln_class,
+            title=title,
+            tool_name=f.tool_name,
+            payload_used=f.payload_used,
+            observed_behavior=observed,
+            expected_behavior=f.expected_behavior,
+            poc=f.poc, cvss_estimate=f.cvss_estimate,
+            remediation=f.remediation,
+            raw_response=f.raw_response,
+        ))
+
+    # (3) Dedupe by (vuln_class, response fingerprint)
+    groups: dict[tuple[str, str], list[MCPFinding]] = {}
+    for f in out:
+        key = (f.vuln_class, _fingerprint_response(f.raw_response,
+                                                   f.tool_name))
+        groups.setdefault(key, []).append(f)
+
+    deduped: list[MCPFinding] = []
+    for (_class, _fp), members in groups.items():
+        # Keep the highest-severity representative.
+        rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        members.sort(key=lambda m: rank.get(m.severity, 9))
+        rep = members[0]
+        if len(members) > 1:
+            extra_tools = sorted({m.tool_name for m in members[1:]})[:6]
+            rep = MCPFinding(
+                id=rep.id, phase=rep.phase,
+                severity=rep.severity, vuln_class=rep.vuln_class,
+                title=rep.title,
+                tool_name=rep.tool_name,
+                payload_used=rep.payload_used,
+                observed_behavior=(
+                    f"[occurrences={len(members)} across tools: "
+                    f"{', '.join(extra_tools)}] "
+                    + (rep.observed_behavior or "")
+                ),
+                expected_behavior=rep.expected_behavior,
+                poc=rep.poc, cvss_estimate=rep.cvss_estimate,
+                remediation=rep.remediation,
+                raw_response=rep.raw_response,
+            )
+        deduped.append(rep)
+
+    return deduped
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _fid(raw: str) -> str:
@@ -960,6 +1127,14 @@ async def _run_pipeline(session: ClientSession, args) -> MCPAttackReport:
     # Phase 7: Chain synthesis (Opus)
     if len(all_findings) >= 2:
         all_findings = await synthesize_findings(all_findings, profile, ai_client, args.verbose)
+
+    # Phase 8: Calibration — scope-enforcement guard, SCHEMA cap, dedupe
+    pre_cal = len(all_findings)
+    all_findings = _calibrate_findings(all_findings)
+    if pre_cal != len(all_findings):
+        print(f"\n  {GREEN}✓{RESET} calibration: "
+              f"{pre_cal} raw findings → {len(all_findings)} after "
+              f"scope-guard + SCHEMA cap + dedupe")
 
     report.findings = all_findings
     report.critical_count = sum(1 for f in all_findings if f.severity == "CRITICAL")
