@@ -53,7 +53,7 @@ _CLASSIFIERS: dict[DataClass, list[tuple[str, re.Pattern, list[str]]]] = {
         ("github_pat",        re.compile(r"\bghp_[A-Za-z0-9]{30,}\b"),                ["SOC2"]),
         ("github_app_tok",    re.compile(r"\bghs_[A-Za-z0-9]{30,}\b"),                ["SOC2"]),
         ("slack_bot_token",   re.compile(r"\bxox[baprs]-[A-Za-z0-9\-]{10,}"),         ["SOC2"]),
-        ("stripe_live_key",   re.compile(r"\bsk_live_[A-Za-z0-9]{20,}"),              ["PCI-DSS", "SOC2"]),
+        ("stripe_live_key",   re.compile(r"\bsk_live_[A-Za-z0-9_\-]{20,}"),            ["PCI-DSS", "SOC2"]),
         ("vercel_token",      re.compile(r"\bvc_[A-Za-z0-9_]{20,}"),                  ["SOC2"]),
         ("jwt_bearer",        re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"), ["SOC2"]),
         ("pem_private",       re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"), ["SOC2", "FedRAMP"]),

@@ -134,7 +134,7 @@ def test_optimize_harm_score_scales_with_classes_and_transit():
                             "AWS_ACCESS_KEY_ID=AKIAEXAMPLEEXAMPLE7Q "
                             "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyzABCDEF12 "
                             "VERCEL_TOKEN=vc_abcdefghijklmnopqrstuvwxyz "
-                            "sk_live_abcdefghijklmnopqrstuvwxyzABCDEFGH "
+                            "sk_live_FAKE-FIXTURE-not-a-real-key-1234567890 "
                             "alice@example.com "
                             "card: 4532015112830366"),
                         severity="CRITICAL")
