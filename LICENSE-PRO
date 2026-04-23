@@ -1,0 +1,12 @@
+Commercial source-available license (terms pending).
+
+Modules under src/argus/pro/ are not covered by the MIT license in
+LICENSE-CORE. Until a formal license text is committed here, use
+of those modules in production requires written permission from the
+copyright holder.
+
+Contact: security@sixsenseenterprise.com
+Holder:  Odingard Security / Six Sense Enterprise Services
+
+Recommended canonical text to adopt before first PRO release:
+    Business Source License 1.1  — https://mariadb.com/bsl11/

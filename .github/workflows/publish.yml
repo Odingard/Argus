@@ -4,13 +4,18 @@ on:
   release:
     types: [published]
 
+# OIDC trusted publishing — no API token needed. PyPI project config
+# must list this repo + workflow + environment as a trusted publisher:
+#   https://pypi.org/manage/account/publishing/
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
     name: Build & Publish to PyPI
     runs-on: ubuntu-latest
+    environment: pypi
     steps:
       - uses: actions/checkout@v4
 
@@ -27,8 +32,5 @@ jobs:
       - name: Verify package
         run: twine check dist/*
 
-      - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+      - name: Publish to PyPI (OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
