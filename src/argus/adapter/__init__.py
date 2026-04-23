@@ -37,6 +37,9 @@ from argus.adapter.generic_agent import (
 from argus.adapter.real_crewai import (
     CrewAIConfig, RealCrewAIAdapter,
 )
+from argus.adapter.sandboxed_stdio import (
+    SandboxedStdioAdapter, SandboxPolicy,
+)
 
 __all__ = [
     "AdapterObservation", "BaseAdapter", "Request", "Response", "Surface",
@@ -46,4 +49,5 @@ __all__ = [
     "GenericAgentAdapter", "GenericAgentBackend", "GenericAgentTool",
     "GenericAgentMemoryLayer", "InMemoryGenericAgentBackend",
     "CrewAIConfig", "RealCrewAIAdapter",
+    "SandboxedStdioAdapter", "SandboxPolicy",
 ]

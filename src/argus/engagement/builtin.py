@@ -7,6 +7,8 @@ call — see the patterns below.
 """
 from __future__ import annotations
 
+from typing import Optional
+
 from argus.engagement.registry import register_target
 
 
@@ -110,6 +112,26 @@ register_target(
 )
 
 
+# Operator-set flag read by _stdio_mcp_factory at engage time.
+# Toggled via --sandbox on the CLI; safe default is False.
+_SANDBOX_CONFIG: dict = {"enabled": False, "network": "none",
+                         "image": None}
+
+
+def set_sandbox(
+    *,
+    enabled: bool,
+    network: str = "none",
+    image:   Optional[str] = None,
+) -> None:
+    """Called by the CLI before dispatching the engagement. Any
+    subsequent stdio-mcp:// factory call will wrap its subprocess
+    in a hardened container."""
+    _SANDBOX_CONFIG["enabled"] = bool(enabled)
+    _SANDBOX_CONFIG["network"] = network or "none"
+    _SANDBOX_CONFIG["image"]   = image
+
+
 def _stdio_mcp_factory(url: str):
     """
     Live MCP server over stdio transport. The URL form encodes the
@@ -121,6 +143,9 @@ def _stdio_mcp_factory(url: str):
     spaces cleanly). When the URL is just ``stdio-mcp://labrat`` we
     launch the bundled argus.labrat.mcp_server — the canonical real-
     MCP demo target.
+
+    When ``set_sandbox(enabled=True)`` has been called, the
+    subprocess runs inside a hardened Docker container instead.
     """
     from argus.adapter import StdioAdapter
 
@@ -129,6 +154,16 @@ def _stdio_mcp_factory(url: str):
         command = ["python", "-m", "argus.labrat.mcp_server"]
     else:
         command = [seg for seg in body.replace("+", " ").split(" ") if seg]
+
+    if _SANDBOX_CONFIG["enabled"]:
+        from argus.adapter import SandboxedStdioAdapter, SandboxPolicy
+        return SandboxedStdioAdapter(
+            command=command,
+            policy=SandboxPolicy(
+                network=_SANDBOX_CONFIG["network"],
+                image=_SANDBOX_CONFIG["image"],
+            ),
+        )
     return StdioAdapter(command=command)
 
 

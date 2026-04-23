@@ -329,6 +329,18 @@ def main() -> int:
                    help=("`serve` launches a malicious MCP server on "
                          "stdio; `journal` prints observed probes."))
 
+    p.add_argument("--sandbox", action="store_true",
+                   help=("Run the target subprocess inside a hardened "
+                         "Docker container (network=none, read-only "
+                         "rootfs, drop caps, 512m / 1 cpu / 64 pids). "
+                         "Requires docker in PATH. Use this for any "
+                         "target of unknown provenance."))
+    p.add_argument("--sandbox-network", default="none",
+                   choices=["none", "bridge", "host"],
+                   help="Network policy for --sandbox (default: none).")
+    p.add_argument("--sandbox-image", default=None, metavar="IMAGE",
+                   help="Override docker image used by --sandbox.")
+
     # Support shortcuts: ``argus demo:<name>`` and ``argus engage <url>``.
     if len(sys.argv) >= 2 and sys.argv[1].startswith("demo:"):
         name = sys.argv[1].split(":", 1)[1]
@@ -561,6 +573,19 @@ def main() -> int:
             )
         print(f"unknown --demo: {args.demo}")
         return 2
+
+    # --sandbox: toggle the stdio-mcp factory to wrap subprocesses
+    # in Docker before we dispatch the engagement.
+    if getattr(args, "sandbox", False):
+        from argus.engagement.builtin import set_sandbox
+        set_sandbox(
+            enabled=True,
+            network=args.sandbox_network,
+            image=args.sandbox_image,
+        )
+        print(f"  {AMBER}⚡ sandbox mode ON "
+              f"(network={args.sandbox_network}, "
+              f"image={args.sandbox_image or 'auto'}){RESET}")
 
     # Smart dispatcher — if the operator supplied a positional
     # target, figure out what it is (URL / GitHub / npm / pip /
