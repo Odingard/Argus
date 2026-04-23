@@ -73,8 +73,26 @@ class StdioAdapter(MCPAdapter):
                 ClientSession(read, write)
             )
             await self._session.initialize()
-        except Exception:
+        except Exception as e:
             await self._exit_stack.aclose()
             self._exit_stack = None
             self._session = None
+            # "Connection closed" during initialize means the
+            # subprocess died before the MCP handshake completed.
+            # Surface a clear message pointing the operator at the
+            # subprocess stderr (which the MCP SDK already printed
+            # above this traceback — npm 404s, missing pypi package,
+            # crashy scripts all land here).
+            msg = str(e)
+            if "Connection closed" in msg or "initialize" in msg.lower():
+                cmd = " ".join(self.command)
+                raise AdapterError(
+                    f"the MCP subprocess died before handshake. "
+                    f"Command was:\n"
+                    f"    {cmd}\n"
+                    f"Check the stderr output above for the real "
+                    f"cause. Common ones: npm 404 (try `uvx <pkg>` "
+                    f"for PyPI), missing binary, missing arg, crash "
+                    f"on startup."
+                ) from e
             raise

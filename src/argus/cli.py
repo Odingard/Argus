@@ -527,9 +527,10 @@ def _target_slug(url: str) -> str:
 
 
 def _cli_entry() -> int:
-    """Top-level entry point — catches AdapterError and a handful of
-    common installer / launcher failures and prints a clean operator
-    message instead of a 40-line traceback."""
+    """Top-level entry point — catches AdapterError, the MCP SDK's
+    own McpError, and a handful of common installer / launcher
+    failures and prints a clean operator message instead of a 40-
+    line traceback."""
     from argus.adapter.base import AdapterError
     try:
         return main()
@@ -542,6 +543,24 @@ def _cli_entry() -> int:
     except KeyboardInterrupt:
         print(f"\n{GRAY}Interrupted.{RESET}")
         return 130
+    except Exception as e:
+        # Final safety net — known classes of subprocess / transport
+        # errors we'd rather not traceback on. We still re-raise if
+        # none of the fingerprints match so unexpected bugs remain
+        # debuggable.
+        name = type(e).__name__
+        msg  = str(e)
+        fingerprints = (
+            "McpError", "Connection closed",
+            "BrokenPipeError", "RemoteProtocolError",
+        )
+        if any(fp in name or fp in msg for fp in fingerprints):
+            print(f"\n{RED}✗ transport error ({name}): {msg}{RESET}")
+            print(f"  {GRAY}The subprocess died or the remote endpoint "
+                  f"closed the connection. See stderr output above "
+                  f"for the actual cause.{RESET}")
+            return 2
+        raise
 
 
 if __name__ == "__main__":
