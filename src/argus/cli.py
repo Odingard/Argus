@@ -318,6 +318,17 @@ def main() -> int:
                    help="Render an engagement's artifact package into "
                         "a single-page report.html.")
 
+    p.add_argument("--typosquat", default=None, metavar="PACKAGE",
+                   help=("Scan npm (default) or PyPI for typosquats of "
+                         "PACKAGE or `@all-known-mcp`. Pass "
+                         "--typosquat-registry pypi to scan PyPI."))
+    p.add_argument("--typosquat-registry", default="npm",
+                   choices=["npm", "pypi"])
+    p.add_argument("--adversarial-mcp", default=None,
+                   choices=["serve", "journal"],
+                   help=("`serve` launches a malicious MCP server on "
+                         "stdio; `journal` prints observed probes."))
+
     # Support shortcuts: ``argus demo:<name>`` and ``argus engage <url>``.
     if len(sys.argv) >= 2 and sys.argv[1].startswith("demo:"):
         name = sys.argv[1].split(":", 1)[1]
@@ -345,6 +356,10 @@ def main() -> int:
         sys.argv = sys.argv[:1] + passthrough + ["--mcp"] + rest
     if len(sys.argv) >= 2 and sys.argv[1] == "targets":
         sys.argv[1:2] = ["--list-targets"]
+    if len(sys.argv) >= 3 and sys.argv[1] == "typosquat":
+        sys.argv[1:3] = ["--typosquat", sys.argv[2]]
+    if len(sys.argv) >= 3 and sys.argv[1] == "adversarial-mcp":
+        sys.argv[1:3] = ["--adversarial-mcp", sys.argv[2]]
 
     args = p.parse_args()
 
@@ -416,6 +431,70 @@ def main() -> int:
         print(f"report.html → {rr.output_path} "
               f"(severity {rr.severity}, harm {rr.harm_score})")
         return 0
+
+    if args.typosquat:
+        from argus.adversarial import scan as _scan
+        from argus.adversarial.typosquat import (
+            KNOWN_NPM_MCP_PACKAGES, KNOWN_PYPI_MCP_PACKAGES,
+        )
+        registry = args.typosquat_registry
+        if args.typosquat == "@all-known-mcp":
+            targets = (KNOWN_NPM_MCP_PACKAGES if registry == "npm"
+                       else KNOWN_PYPI_MCP_PACKAGES)
+        else:
+            targets = [args.typosquat]
+        print(f"  {GRAY}scanning {registry} for typosquats of "
+              f"{len(targets)} package(s)…{RESET}")
+        result = _scan(targets=targets, registry=registry)
+        print(f"  {GREEN}✓{RESET} candidates checked: "
+              f"{result.candidates_checked}")
+        if not result.squats_found:
+            print(f"  {GRAY}no squats found on {registry} for "
+                  f"the given targets.{RESET}")
+            return 0
+        print(f"  {RED}! {len(result.squats_found)} typosquat(s) "
+              f"found on {registry}:{RESET}")
+        for s in result.squats_found:
+            print(f"      {BOLD}{s.squat}{RESET}  "
+                  f"{AMBER}(squatting: {s.legit}){RESET}")
+            if s.description:
+                print(f"        {GRAY}“{s.description[:120]}”{RESET}")
+            if s.signals:
+                print(f"        {GRAY}signals: "
+                      f"{', '.join(s.signals)}{RESET}")
+        # Persist for downstream handling.
+        import json as _json
+        from pathlib import Path as _P
+        out = _P(args.output if args.output != "results/"
+                 else f"results/typosquat/{registry}")
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "typosquat_result.json").write_text(
+            _json.dumps(result.to_dict(), indent=2), encoding="utf-8")
+        print(f"  {GREEN}✓{RESET} saved → {out}/typosquat_result.json")
+        return 0
+
+    if args.adversarial_mcp:
+        from argus.adversarial import mcp_server as _am
+        if args.adversarial_mcp == "serve":
+            import asyncio as _asyncio
+            print(f"  {RED}! launching adversarial MCP server on "
+                  f"stdio{RESET}")
+            print(f"  {GRAY}journal → {_am.journal_path()}{RESET}")
+            try:
+                _asyncio.run(_am.run_stdio())
+            except KeyboardInterrupt:
+                pass
+            return 0
+        if args.adversarial_mcp == "journal":
+            import json as _json2
+            events = _am.drain_journal()
+            if not events:
+                print(f"  {GRAY}(journal empty){RESET}")
+                return 0
+            for e in events:
+                print(_json2.dumps(e))
+            return 0
+        return 2
 
     if args.mcp:
         # Shorthand: positional args after `argus mcp` become the MCP
