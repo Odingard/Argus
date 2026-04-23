@@ -103,6 +103,11 @@ def test_bare_name_defaults_to_npx():
     ("https://github.com/vercel/mcp-handler", "vercel", "mcp-handler"),
     ("https://github.com/vercel/mcp-handler.git", "vercel", "mcp-handler"),
     ("https://www.github.com/anthropic/claude", "anthropic", "claude"),
+    # npm-shorthand — previously fell through to npx and silently
+    # failed for Python packages. Now routed through the clone +
+    # pyproject-aware detection path like the full URL forms.
+    ("github:dhruvpatel1706/mcp-zettel", "dhruvpatel1706", "mcp-zettel"),
+    ("github:vercel/mcp-handler",        "vercel",         "mcp-handler"),
 ])
 def test_looks_like_github_parses(url, owner, name):
     got = _looks_like_github(url)
@@ -186,6 +191,52 @@ def test_detect_launch_from_pyproject(tmp_path):
         'name = "my-mcp-server"\n'
     )
     assert _detect_launch_command(tmp_path) == ["uvx", "my-mcp-server"]
+
+
+def test_detect_launch_prefers_server_entry_over_package_name(tmp_path):
+    """mcp-zettel pattern: package name is 'mcp-zettel' but the
+    runnable entry is 'mcp-zettel-server'. We want the server entry,
+    not the bare package name (which would launch the interactive CLI
+    and hang in stdio mode)."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\n'
+        'name = "mcp-zettel"\n'
+        '\n'
+        '[project.scripts]\n'
+        'mcp-zettel        = "mcp_zettel.cli:app"\n'
+        'mcp-zettel-server = "mcp_zettel.server:main"\n'
+    )
+    assert _detect_launch_command(tmp_path) == [
+        "uvx", "mcp-zettel-server",
+    ]
+
+
+def test_detect_launch_ignores_pyproject_without_mcp_signals(tmp_path):
+    """A generic Python library with no MCP-shaped entry points must
+    NOT be dispatched via uvx — it would install fine but has no
+    runnable server and will hang/error at handshake."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\n'
+        'name = "some-random-lib"\n'
+        '\n'
+        '[project.scripts]\n'
+        'some-cli = "some_random_lib.cli:main"\n'
+    )
+    assert _detect_launch_command(tmp_path) is None
+
+
+def test_detect_launch_picks_mcp_named_script_when_no_server_suffix(tmp_path):
+    """Entry named 'mcp-foo' (contains 'mcp' but no -server suffix) is
+    an acceptable fallback over a generic CLI."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\n'
+        'name = "foo"\n'
+        '\n'
+        '[project.scripts]\n'
+        'foo-cli = "foo.cli:main"\n'
+        'mcp-foo = "foo.server:main"\n'
+    )
+    assert _detect_launch_command(tmp_path) == ["uvx", "mcp-foo"]
 
 
 def test_detect_launch_from_readme_code_block(tmp_path):

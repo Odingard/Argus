@@ -184,6 +184,14 @@ def _dispatch_github(repo: dict, *, workdir: Path) -> Dispatch:
                     f"    • If you have a launch command, pass it "
                     f"directly:    argus mcp <cmd> <args...>"),
         )
+    # If the detector picked `uvx <pkg>`, rewrite to `uvx --from
+    # git+<clone_url> <pkg>` so the server installs from the exact
+    # GitHub commit we just inspected. Otherwise uvx would reach for
+    # the name on PyPI — which may not exist, or may be a different
+    # project, or may be a stale version relative to the repo.
+    if len(detected) >= 2 and detected[0] == "uvx":
+        detected = ["uvx", "--from", f"git+{repo['clone_url']}",
+                    detected[1]]
     encoded = "+".join(detected).replace(" ", "+")
     return Dispatch(
         action="engage",
@@ -264,9 +272,15 @@ def _looks_like_npm_package(arg: str) -> bool:
 
 
 _GITHUB_RE = re.compile(
-    r"^(?:https?://)?(?:www\.)?github\.com/"
-    r"(?P<owner>[\w\-.]+)/(?P<name>[\w\-.]+?)(?:\.git)?/?$",
-    re.IGNORECASE,
+    r"^"
+    r"(?:"
+    r"  (?:https?://)?(?:www\.)?github\.com/"      # github.com/owner/repo
+    r"|"
+    r"  github:"                                   # github:owner/repo (npm shorthand)
+    r")"
+    r"(?P<owner>[\w\-.]+)/(?P<name>[\w\-.]+?)"
+    r"(?:\.git)?/?$",
+    re.IGNORECASE | re.VERBOSE,
 )
 
 
@@ -326,15 +340,15 @@ def _detect_launch_command(repo_dir: Path) -> Optional[list[str]]:
         except json.JSONDecodeError:
             pass
 
-    # 3) pyproject.toml — poetry/hatch project with [project.scripts].
+    # 3) pyproject.toml — prefer [project.scripts] entries that look
+    # like MCP servers (ending -server / containing "mcp") over the
+    # bare package name. mcp-zettel e.g. has package name `mcp-zettel`
+    # but the server entry is `mcp-zettel-server`.
     pyproj = repo_dir / "pyproject.toml"
     if pyproj.is_file():
-        text = pyproj.read_text(encoding="utf-8", errors="replace")
-        m = re.search(r'^\s*name\s*=\s*"([^"]+)"', text, re.MULTILINE)
-        if m:
-            name = m.group(1)
-            if "mcp" in name.lower() or "server" in name.lower():
-                return ["uvx", name]
+        entry = _pick_pyproject_entry(pyproj)
+        if entry is not None:
+            return ["uvx", entry]
 
     # 4) README hint — first `npx`/`uvx`/`pipx` command in a fenced
     # code block.
@@ -357,6 +371,59 @@ def _detect_launch_command(repo_dir: Path) -> Optional[list[str]]:
             if candidate.endswith(".py"):
                 return ["python", str(p)]
             return ["node", str(p)]
+
+    return None
+
+
+def _pick_pyproject_entry(pyproj: Path) -> Optional[str]:
+    """Pick a runnable entry from a pyproject.toml. Prefer scripts
+    that look like MCP servers; fall back to the package name.
+
+    Returns None if the manifest doesn't advertise anything
+    runnable that we can reasonably launch."""
+    text = pyproj.read_text(encoding="utf-8", errors="replace")
+
+    # Extract [project.scripts] block — tolerant to whitespace /
+    # comments; we only need the LHS names.
+    scripts_block = re.search(
+        r"\[project\.scripts\]\s*\n"
+        r"(?P<body>(?:[^\[]|\n)*?)"
+        r"(?=\n\[|\Z)",
+        text,
+    )
+    scripts: list[str] = []
+    if scripts_block:
+        for line in scripts_block.group("body").splitlines():
+            m = re.match(r'^\s*([A-Za-z0-9_\-.]+)\s*=', line)
+            if m:
+                scripts.append(m.group(1))
+
+    # Rank: explicit "*-server" > contains "server" > contains "mcp"
+    # > first script > None.
+    def _rank(name: str) -> int:
+        low = name.lower()
+        if low.endswith("-server") or low.endswith("_server"):
+            return 0
+        if "server" in low:
+            return 1
+        if "mcp" in low:
+            return 2
+        return 3
+
+    if scripts:
+        scripts.sort(key=_rank)
+        # Only return a script if the best candidate looks like a
+        # server — otherwise the package is a CLI or library, not an
+        # MCP server, and we should let later detectors decide.
+        if _rank(scripts[0]) <= 2:
+            return scripts[0]
+
+    # Fallback: package name heuristic (legacy behaviour).
+    m = re.search(r'^\s*name\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    if m:
+        name = m.group(1)
+        if "mcp" in name.lower() or "server" in name.lower():
+            return name
 
     return None
 
