@@ -38,24 +38,37 @@ load_dotenv(override=True)
 
 # ── Visual ────────────────────────────────────────────────────────────────────
 
-BANNER = r"""
-  █████╗ ██████╗  ██████╗ ██╗   ██╗███████╗
- ██╔══██╗██╔══██╗██╔════╝ ██║   ██║██╔════╝
- ███████║██████╔╝██║  ███╗██║   ██║███████╗
- ██╔══██║██╔══██╗██║   ██║██║   ██║╚════██║
- ██║  ██║██║  ██║╚██████╔╝╚██████╔╝███████║
- ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝
-   Autonomous AI Red Team Platform
-   Odingard Security  ·  Six Sense Enterprise Services
-"""
-
 BOLD  = "\033[1m"
 RED   = "\033[91m"
 AMBER = "\033[93m"
 BLUE  = "\033[94m"
 GRAY  = "\033[90m"
 GREEN = "\033[92m"
+WHITE = "\033[97m"
 RESET = "\033[0m"
+
+# Red-team thematic gradient for the banner: bright → classic → deep.
+# 256-color ANSI; degrades to plain red on 8-color terminals and to
+# plain text wherever ANSI is stripped (pipes, CI log collectors).
+_R1  = "\033[38;5;196m"   # vermillion (top of gradient)
+_R2  = "\033[38;5;160m"   # arterial
+_R3  = "\033[38;5;124m"   # deep crimson
+_TAG = "\033[38;5;245m"   # muted gray for tagline
+
+# `r"""..."""` would keep backslashes literal and break the ANSI
+# escape codes; use a normal triple-quoted string.
+BANNER = (
+    "\n"
+    f"{_R1}  █████╗ ██████╗  ██████╗ ██╗   ██╗███████╗{RESET}\n"
+    f"{_R1} ██╔══██╗██╔══██╗██╔════╝ ██║   ██║██╔════╝{RESET}\n"
+    f"{_R2} ███████║██████╔╝██║  ███╗██║   ██║███████╗{RESET}\n"
+    f"{_R2} ██╔══██║██╔══██╗██║   ██║██║   ██║╚════██║{RESET}\n"
+    f"{_R3} ██║  ██║██║  ██║╚██████╔╝╚██████╔╝███████║{RESET}\n"
+    f"{_R3} ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝{RESET}\n"
+    f"{_TAG}   Autonomous AI Red Team Platform{RESET}\n"
+    f"{BOLD}{WHITE}   Odingard Security{RESET}{_TAG}  ·  {RESET}"
+    f"{BOLD}{WHITE}Six Sense Enterprise Services{RESET}\n"
+)
 
 SEV_COLORS = {
     "CRITICAL": RED, "HIGH": AMBER, "MEDIUM": "\033[33m", "LOW": GREEN

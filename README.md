@@ -1,60 +1,102 @@
-```console
-╔════════════════════════════════════════════════════════════════════════════╗
-║                                                                            ║
-║       ___    ____  ________  __  _____                                     ║
-║      /   |  / __ \/ ____/ / / / / ___/                                     ║
-║     / /| | / /_/ / / __/ / / /  \__ \                                      ║
-║    / ___ |/ _, _/ /_/ / /_/ /  ___/ /                                      ║
-║   /_/  |_/_/ |_|\____/\____/  /____/                                       ║
-║                                                                            ║
-║   Autonomous AI Red Team Platform                                          ║
-║   Odingard Security by Six Sense Enterprise Services                       ║
-║                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
-```
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="ARGUS — Autonomous AI Red Team Platform">
+</p>
 
-## 1. The Positioning Statement
-ARGUS does not compete with traditional pentesting tools. It does something they inherently cannot do — test the AI-specific attack surface that none of them were built to find. If you run traditional SAST to test your raw infrastructure, you still need ARGUS to test the AI agents running on top of that infrastructure. They are complementary, not competing.
+[![PyPI](https://img.shields.io/pypi/v/argus-core.svg)](https://pypi.org/project/argus-core/)
+[![Python](https://img.shields.io/pypi/pyversions/argus-core.svg)](https://pypi.org/project/argus-core/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE-CORE)
+[![CI](https://github.com/Odingard/argus-core/actions/workflows/ci.yml/badge.svg)](https://github.com/Odingard/argus-core/actions/workflows/ci.yml)
 
-## 2. The Architecture (Open-Core)
-ARGUS is uniquely built as an 11-Agent Swarm. 
+## 1. Positioning
 
-This Open-Source core implements the basic scaffolding of the **Attack Layer**. It provides the entry-point logic to spawn short-lived, narrowly scoped agents designed to hunt AI logic flaws without accumulated bias or context collapse. 
+ARGUS does not compete with traditional pentesting tools. It does something they inherently cannot do — **test the AI-specific attack surface** that none of them were built to find. If you run SAST against your infrastructure, you still need ARGUS against the agents running on top of it. They are complementary, not competing.
+
+## 2. Quick start
 
 ```bash
 pip install argus-core
 ```
 
-### One-line engagement
+One input, auto-routed — the same `argus <anything>` command engages an MCP server, clones a GitHub repo, npx-launches an MCP package, runs a local script, or opens a labrat fixture:
 
 ```bash
-argus engage crewai://labrat       # 8-agent swarm against a crewAI-shaped target
-argus engage langgraph://labrat    # LangGraph StateGraph attack
-argus engage mcp://customer.example/sse   # live MCP server
-argus engage http://customer.example/agent  # generic HTTP agent endpoint
-
-argus targets                      # list every registered target class
-argus report results/engagements/  # render a self-contained HTML report
+argus mcp://customer.example/sse              # live MCP over SSE
+argus github.com/vercel/mcp-handler           # clone + dispatch
+argus @modelcontextprotocol/server-filesystem # npx-launched stdio MCP
+argus ./my_server.py                          # local file
+argus crewai://labrat                         # in-process crewAI fixture
+argus --list-targets                          # every registered scheme
+argus --help                                  # full operational surface
 ```
 
-### Packaged demos
+Engagements land in `results/`; render an offline HTML report with `argus --report results/<run>/`.
 
-```bash
-argus demo:generic-agent   # self-evolving agent attack (~3s, $0)
-argus demo:evolver         # Pillar-2 Raptor Cycle corpus evolution
-argus demo:crewai          # end-to-end crewAI engagement
+## 3. What you get in Core
+
+**12 offensive agents covering all 9 MAAC phases:**
+
+| Agent | Class | MAAC phases |
+|---|---|---|
+| PI-02 | Prompt Injection Hunter | 2 |
+| TP-02 | Tool Poisoning | 1, 2 |
+| MP-03 | Memory Poisoning | 4 |
+| IS-04 | Identity Spoof | 2 |
+| RC-08 | Race Condition | 5 |
+| OD-06 | Orchestration Drift | 6 |
+| PE-07 | Privilege Escalation | 5, 7 |
+| XE-06 | Cross-Agent Exfiltration | 7, 8 |
+| SC-09 | Supply Chain | 1 |
+| ME-10 | Model Extraction | 1, 3 |
+| EP-11 | Environment Pivoting | 8 |
+| MC-15 | Handoff Auditor | 2, 5, 7 |
+
+**Platform:**
+
+- **Coordinated swarm runtime** — blackboard + live correlator, phase-pair triggers, pheromone decay, Haiku/Opus budget caps
+- **Stateful runtime harness** — deterministic multi-turn replay, 5 invariants, scenario library
+- **Real MCP engagement** — stdio / SSE / HTTP transports; wraps untrusted servers in docker with `--cap-drop ALL`
+- **Adversarial tooling** — attacker-controlled MCP server + npm/PyPI typosquat scanner
+- **In-process real-framework adapters** — crewAI, AutoGen, LangGraph, LlamaIndex, Parlant, Hermes
+- **Forensic Wilson bundles** — signed, reproducible evidence suitable for regulator submission
+- **Impact Optimizer / BlastRadiusMap** — harm-scoring with SOC2 / PCI-DSS / HIPAA / FedRAMP / GDPR tags
+- **Workflow integration** — GitHub Action, pre-commit hook, FastAPI webhook receiver
+
+## 4. Core vs. Pro
+
+ARGUS is open-core:
+
+- **Core (this package)** — MIT licensed. Everything above. Self-sufficient for operators running their own engagements.
+- **Pro** (`src/argus/pro/`, source-available) — Monte Carlo Tree Search exploit-chain planning, multi-model consensus gate for CRITICAL findings, eBPF/tcpdump L7 pcap, fleet-scale webhook store. Gated by `argus.license.require()` at import; today a permissive stub, tightens with first PRO customer.
+
+Source for both tiers lives in this repo. Pro license terms land before any Pro release; see [`LICENSE-PRO`](./LICENSE-PRO).
+
+## 5. Migrating from `argus-redteam`
+
+`argus-redteam==0.4.0` remains available on PyPI but is no longer maintained. The Python import name (`import argus`) did not change, so your code still works:
+
+```diff
+- pip install argus-redteam
++ pip install argus-core
 ```
 
-See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the full
-operator guide, [`docs/ADDING_A_LABRAT.md`](docs/ADDING_A_LABRAT.md) to
-extend ARGUS to a new framework, and [`docs/NO_CHEATING.md`](docs/NO_CHEATING.md)
-for the integrity contract every finding must honour.
+A `0.4.1` deprecation-pointer release of `argus-redteam` is planned.
 
-## 3. ⚠️ ARGUS Enterprise 
-This OSS package contains the **Core Execution Engine**. It fundamentally lacks the Correlation Synthesis and Reporting Validation engines built into the proprietary SaaS product.
+## 6. Docs
 
-**The Full 11-Agent Swarm:**
-ARGUS Enterprise deploys 10 simultaneous specialized agents (Prompt Injection Hunter, Tool Poisoner, Memory Poisoner, Identity Spoofer, etc.) and routes all intelligence to a single **Correlation Agent**. This Correlation Agent chains individual, seemingly benign findings into compound, multi-step zero-day attack paths. 
+- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) — operator guide
+- [`docs/ADDING_A_LABRAT.md`](docs/ADDING_A_LABRAT.md) — extend ARGUS to a new framework
+- [`docs/NO_CHEATING.md`](docs/NO_CHEATING.md) — the integrity contract every finding must honour
+- [`PHASES.md`](PHASES.md) — full build plan + moat map
+- [`SECURITY.md`](SECURITY.md) — responsible disclosure
 
-To access the complete Swarm logic and generate verifiable CVEs, please visit the Enterprise portal:
-👉 **[ARGUS Enterprise Deployment](https://sixsenseenterprise.com)**
+## 7. Enterprise
+
+The Core Execution Engine is self-contained. Teams with compliance, reporting, and scale requirements — correlation synthesis at fleet scale, validator-grade reporting, managed infrastructure — can reach the full-swarm commercial offering at:
+
+👉 **[sixsenseenterprise.com](https://sixsenseenterprise.com)**
+
+## 8. License
+
+Core is MIT — see [`LICENSE-CORE`](./LICENSE-CORE). Pro modules under `src/argus/pro/` are covered by [`LICENSE-PRO`](./LICENSE-PRO) (placeholder today; formal source-available terms to follow before first Pro release).
+
+Responsible-disclosure contact: `security@sixsenseenterprise.com`.
