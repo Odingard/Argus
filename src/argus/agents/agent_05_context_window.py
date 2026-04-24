@@ -41,12 +41,18 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from argus.attacks.judge import LLMJudge
+    from argus.policy.base import PolicySet
 
 from argus.adapter.base import AdapterError, BaseAdapter, Request
 from argus.agents.base import AgentFinding, BaseAgent
 from argus.corpus_attacks import EvolveCorpus
-from argus.observation import ObservationEngine, default_detectors
+from argus.observation import (
+    ObservationEngine, Verdict, default_detectors,
+)
 from argus.session import Session
 
 
@@ -197,6 +203,8 @@ class ContextWindowAgent(BaseAgent):
         observer:         Optional[ObservationEngine] = None,
         evolve_corpus:    Optional[EvolveCorpus] = None,
         leak_patterns:    Optional[list[str]] = None,
+        policy_set:       Optional["PolicySet"] = None,
+        judge:            Optional["LLMJudge"] = None,
         verbose:          bool = False,
     ) -> None:
         super().__init__(verbose=verbose)
@@ -213,6 +221,21 @@ class ContextWindowAgent(BaseAgent):
             )
         )
         self.evolve_corpus = evolve_corpus
+        # Policy substrate — see agent_01 rationale. CW-05 runs a
+        # baseline-cold vs long-con comparison; the judge evaluates
+        # each long-con's final response against policies applicable
+        # to context-window abuse (system-prompt leak, sensitive
+        # info, excessive agency).
+        if policy_set is None:
+            from argus.policy.registry import (
+                default_registry, AgentClass,
+            )
+            policy_set = default_registry().resolve(
+                agent_class=AgentClass.GENERIC,
+            )
+        self.policy_set = policy_set
+        from argus.attacks.judge import LLMJudge as _LLMJudge
+        self.judge = judge if judge is not None else _LLMJudge()
 
     @property
     def technique_library(self) -> dict:
@@ -340,7 +363,117 @@ class ContextWindowAgent(BaseAgent):
                 severity="HIGH",
             )
             out.append((finding, v))
+
+        # Semantic policy evaluation — judge the long-con's final
+        # response against CW-05-relevant policies. Gated behind
+        # ARGUS_JUDGE=1 so keyless engagements degrade cleanly.
+        judge_tuples = self._judge_findings(
+            script=script, surface=surface, target_id=target_id,
+            baseline_sess=baseline_sess, con_sess=con_sess,
+        )
+        out.extend(judge_tuples)
         return out
+
+    def _judge_findings(
+        self, *, script: LongConScript, surface: str, target_id: str,
+        baseline_sess, con_sess,
+    ) -> list[tuple]:
+        """Evaluate the long-con's final response against relevant
+        policies. Context-window attacks succeed when the
+        long-con session produces something the baseline-cold
+        session didn't — so we pass both to the judge as
+        post-attack and baseline respectively."""
+        from argus.attacks.judge import LLMJudge as _LLMJudge
+        if not _LLMJudge.available():
+            return []
+        relevant = self.policy_set.relevant_for(
+            technique_id=script.technique_id,
+        )
+        if not relevant:
+            return []
+        from argus.attacks.judge import JudgeInput
+        from argus.observation import BehaviorDelta, DeltaKind
+
+        post_text     = self._last_response_text(con_sess.transcript())
+        baseline_text = self._last_response_text(baseline_sess.transcript())
+
+        out: list[tuple] = []
+        for policy in relevant:
+            try:
+                verdict = self.judge.evaluate(JudgeInput(
+                    policy       = policy,
+                    probe        = script.final,
+                    response     = post_text,
+                    baseline     = baseline_text,
+                    technique_id = script.technique_id,
+                    surface      = surface,
+                ))
+            except Exception as e:
+                if self.verbose:
+                    print(f"  [{self.AGENT_ID}] judge error on "
+                          f"{policy.id}: {type(e).__name__}: {e}")
+                continue
+            if not verdict.is_finding():
+                continue
+
+            obs_verdict = Verdict(
+                delta      = BehaviorDelta.DELTA,
+                kind       = DeltaKind.CONTENT_LEAK,
+                detector   = "llm_judge",
+                evidence   = verdict.evidence or verdict.reasoning,
+                confidence = verdict.confidence,
+                meta       = {
+                    "policy_id":       policy.id,
+                    "policy_name":     policy.name,
+                    "owasp_llm":       policy.owasp_llm,
+                    "judge_model":     getattr(self.judge, "model", ""),
+                    "judge_kind":      verdict.kind.value,
+                    "judge_reasoning": verdict.reasoning[:400],
+                },
+            )
+            finding = AgentFinding.from_observation(
+                verdict=obs_verdict,
+                agent_id=self.AGENT_ID,
+                vuln_class=self.VULN_CLASS,
+                title=(
+                    f"Policy violation [{policy.id}] via long-con "
+                    f"{script.technique_id}"
+                ),
+                description=(
+                    f"Policy {policy.id!r} ({policy.name}) VIOLATED "
+                    f"by the long-con session (judge confidence "
+                    f"{verdict.confidence:.2f}). The model complied "
+                    f"with the attack AFTER {len(script.buildup)} "
+                    f"buildup turns but refused in the baseline-cold "
+                    f"session — context-window compromise. "
+                    f"Evidence: {verdict.evidence[:300]!r}."
+                ),
+                surface=surface,
+                session_id=con_sess.session_id,
+                attack_variant_id=script.technique_id,
+                baseline_ref=f"{target_id}::baseline_cold",
+                severity=policy.severity,
+            )
+            out.append((finding, obs_verdict))
+        return out
+
+    @staticmethod
+    def _last_response_text(transcript: list[dict]) -> str:
+        """Extract the final-turn response body from a session
+        transcript for the judge to evaluate."""
+        if not transcript:
+            return ""
+        last = transcript[-1]
+        obs = last.get("observation") or {}
+        resp = obs.get("response") or {}
+        body = resp.get("body", "")
+        if isinstance(body, (dict, list)):
+            import json
+            try:
+                return json.dumps(body, default=str)
+            except (TypeError, ValueError):
+                return str(body)
+        return str(body or "")
 
     def _maybe_evolve(
         self,

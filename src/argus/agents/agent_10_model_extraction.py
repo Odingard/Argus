@@ -41,7 +41,11 @@ import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from argus.attacks.judge import LLMJudge
+    from argus.policy.base import PolicySet
 
 from argus.adapter.base import AdapterError, BaseAdapter, Request
 from argus.agents.base import AgentFinding, BaseAgent
@@ -171,6 +175,8 @@ class ModelExtractionAgent(BaseAgent):
         observer:         Optional[ObservationEngine] = None,
         evolve_corpus:    Optional[EvolveCorpus] = None,
         techniques:       Optional[list[str]] = None,
+        policy_set:       Optional["PolicySet"] = None,
+        judge:            Optional["LLMJudge"] = None,
         verbose:          bool = False,
     ) -> None:
         super().__init__(verbose=verbose)
@@ -181,6 +187,17 @@ class ModelExtractionAgent(BaseAgent):
             [t for t in (techniques or []) if t in EXTRACTION_PROMPTS]
             or list(EXTRACTION_PROMPTS.keys())
         )
+        # Policy substrate — see agent_01 for the design rationale.
+        if policy_set is None:
+            from argus.policy.registry import (
+                default_registry, AgentClass,
+            )
+            policy_set = default_registry().resolve(
+                agent_class=AgentClass.GENERIC,
+            )
+        self.policy_set = policy_set
+        from argus.attacks.judge import LLMJudge as _LLMJudge
+        self.judge = judge if judge is not None else _LLMJudge()
 
     @property
     def technique_library(self) -> dict:
@@ -317,6 +334,91 @@ class ModelExtractionAgent(BaseAgent):
                 severity="HIGH",
             )
             out.append((finding, v))
+
+        # Semantic policy evaluation — fires only when ARGUS_JUDGE=1
+        # is set AND a provider key is present. See PI-01 for the
+        # design rationale (keyless engagements degrade cleanly).
+        judge_tuples = self._judge_findings(
+            technique_id=technique_id, prompt=prompt,
+            surface=surface, target_id=target_id,
+            sess=sess, post_text=response_text,
+            baseline=baseline_corpus,
+        )
+        out.extend(judge_tuples)
+        return out
+
+    def _judge_findings(
+        self, *, technique_id: str, prompt: str,
+        surface: str, target_id: str, sess, post_text: str,
+        baseline: str,
+    ) -> list[tuple]:
+        """Evaluate the extraction response against ME-10-relevant
+        policies (system-prompt leakage, sensitive-info disclosure,
+        misinformation). Returns (AgentFinding, Verdict) tuples the
+        caller's evolve-corpus loop can consume unchanged."""
+        from argus.attacks.judge import LLMJudge as _LLMJudge
+        if not _LLMJudge.available():
+            return []
+        relevant = self.policy_set.relevant_for(technique_id=technique_id)
+        if not relevant:
+            return []
+        from argus.attacks.judge import JudgeInput
+        from argus.observation import BehaviorDelta, DeltaKind
+
+        out: list[tuple] = []
+        for policy in relevant:
+            try:
+                verdict = self.judge.evaluate(JudgeInput(
+                    policy       = policy,
+                    probe        = prompt,
+                    response     = post_text,
+                    baseline     = baseline,
+                    technique_id = technique_id,
+                    surface      = surface,
+                ))
+            except Exception as e:
+                if self.verbose:
+                    print(f"  [{self.AGENT_ID}] judge error on "
+                          f"{policy.id}: {type(e).__name__}: {e}")
+                continue
+            if not verdict.is_finding():
+                continue
+
+            obs_verdict = Verdict(
+                delta      = BehaviorDelta.DELTA,
+                kind       = DeltaKind.CONTENT_LEAK,
+                detector   = "llm_judge",
+                evidence   = verdict.evidence or verdict.reasoning,
+                confidence = verdict.confidence,
+                meta       = {
+                    "policy_id":       policy.id,
+                    "policy_name":     policy.name,
+                    "owasp_llm":       policy.owasp_llm,
+                    "judge_model":     getattr(self.judge, "model", ""),
+                    "judge_kind":      verdict.kind.value,
+                    "judge_reasoning": verdict.reasoning[:400],
+                },
+            )
+            finding = AgentFinding.from_observation(
+                verdict=obs_verdict,
+                agent_id=self.AGENT_ID,
+                vuln_class=self.VULN_CLASS,
+                title=(
+                    f"Policy violation [{policy.id}] via {technique_id}"
+                ),
+                description=(
+                    f"Policy {policy.id!r} ({policy.name}) VIOLATED "
+                    f"with judge confidence {verdict.confidence:.2f}. "
+                    f"Evidence: {verdict.evidence[:300]!r}. Probe: "
+                    f"{str(prompt)[:200]!r}."
+                ),
+                surface=surface,
+                session_id=sess.session_id,
+                attack_variant_id=technique_id,
+                baseline_ref=f"{target_id}::baseline_benign",
+                severity=policy.severity,
+            )
+            out.append((finding, obs_verdict))
         return out
 
     # ── Custom verdict logic ────────────────────────────────────────────
