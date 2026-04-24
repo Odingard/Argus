@@ -180,7 +180,13 @@ class PromptInjectionHunter(BaseAgent):
             sample_n,
             category=category,
             tag=tag,
-            surface=surface if surface != "chat" else None,
+            # Any chat-kind surface ("chat", "chat:/api/llm-query",
+            # "chat:default", etc.) is treated as generic — corpus
+            # templates don't carry surface-path metadata, they're
+            # chat-agnostic. A stricter exact-match filter returned
+            # zero variants against discovered endpoints and silently
+            # skipped the attack slate against any real HTTP agent.
+            surface=surface if not (surface or "").startswith("chat") else None,
             seed=sample_seed,
         )
         if not variants:
