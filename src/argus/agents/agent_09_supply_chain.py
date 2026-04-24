@@ -87,11 +87,18 @@ _CAPABILITY_CREEP = re.compile(
 # OAuth-overgrant signatures — April-2026 OAuth supply-chain class. A
 # tool that declares "Allow All" / wildcard scopes at install time is
 # the single biggest third-party-risk factor in this chain.
+#
+# The fourth pattern previously matched any description mentioning
+# "drive", "gmail", or "cloud-platform" — which is legitimate
+# documentation language on thousands of tools that integrate with
+# Google Workspace without necessarily overgranting. Kept only the
+# three patterns that have narrow FP profile: explicit "Allow All",
+# explicit JSON-schema wildcard scope, and explicit "full_access"
+# declarations.
 _OAUTH_OVERGRANT = [
     re.compile(r"(?i)\ballow[_ ]?all\b"),
     re.compile(r"\"scopes?\"\s*:\s*\[\s*\"\*\"\s*\]"),
     re.compile(r"(?i)\bfull[_ -]?access\b"),
-    re.compile(r"(?i)\b(?:admin\.|drive\b(?!\.readonly)|gmail\b|cloud-platform)"),
 ]
 
 # External AI vendors whose OAuth integrations historically carry
@@ -136,6 +143,17 @@ class _SCHit:
 # ── Pattern-level scans ──────────────────────────────────────────────────────
 
 def _scan_urls(text: str, *, where: str) -> list[_SCHit]:
+    """Scan for URLs in a text blob.
+
+    SC-T6 (untrusted-host) stays HIGH — gist/pastebin/bitly/raw-IP/
+    cheap-TLD hosts in a tool description are a real red flag.
+
+    SC-T1 (external-origin-url) demoted to INFO: almost every real
+    tool description mentions an upstream docs URL, an example URL,
+    or a vendor API URL. Firing MEDIUM on each is noise-class — it
+    pollutes the harm_score and trains CISOs to ignore the report.
+    As INFO, the finding still surfaces in the artifact bundle but
+    doesn't contribute to chain severity."""
     out: list[_SCHit] = []
     if not text:
         return out
@@ -149,7 +167,7 @@ def _scan_urls(text: str, *, where: str) -> list[_SCHit]:
             ))
         else:
             out.append(_SCHit(
-                technique="SC-T1-external-origin-url", severity="MEDIUM",
+                technique="SC-T1-external-origin-url", severity="INFO",
                 where=where, snippet=url[:200],
                 pattern_name="external_origin_url",
             ))
@@ -198,14 +216,19 @@ def _scan_oauth_overgrant(surface: Surface) -> list[_SCHit]:
 
 
 def _scan_third_party_ai(surface: Surface) -> list[_SCHit]:
-    """SC-T8 — external AI vendor referenced in tool metadata
-    (April-2026 OAuth supply-chain class)."""
+    """SC-T8 — external AI vendor referenced in tool metadata.
+
+    Demoted to INFO. A tool mentioning "powered by OpenAI" in its
+    description isn't a vulnerability — it's documentation. As HIGH
+    this fired noisily on any tool integrating with a major AI
+    vendor, polluting the harm_score. As INFO the data is preserved
+    for supply-chain auditors who care but doesn't inflate reports."""
     blob = (surface.description or "") + " " + str(surface.schema or {})
     m = _AI_VENDOR_HOSTS.search(blob)
     if not m:
         return []
     return [_SCHit(
-        technique="SC-T8-third-party-ai-integration", severity="HIGH",
+        technique="SC-T8-third-party-ai-integration", severity="INFO",
         where=f"{surface.name}.origin",
         snippet=f"third-party AI vendor: {m.group(0)}",
         pattern_name="third_party_ai_integration",
@@ -254,11 +277,14 @@ def _audit_surface(surface: Surface) -> list[_SCHit]:
             hits.extend(_scan_capability_creep(pdesc, where=where))
             hits.extend(_scan_transitive_fetch(pdesc, where=where))
 
-    # Unsigned-origin check. Only fires when there's SOMETHING to audit —
-    # a bare "hello" tool with no schema isn't worth flagging as unsigned.
+    # Unsigned-origin check. Fires INFO (not MEDIUM) because the MCP
+    # protocol itself has no signature scheme — EVERY real MCP server
+    # would fire this as MEDIUM, which is noise-class. As INFO the
+    # finding stays in the artifact for auditors who care about
+    # provenance policy but doesn't pollute harm_score.
     if desc and not _has_provenance(surface):
         hits.append(_SCHit(
-            technique="SC-T2-unsigned-origin", severity="MEDIUM",
+            technique="SC-T2-unsigned-origin", severity="INFO",
             where=f"{surface.name}.metadata",
             snippet=(
                 "no provenance keys declared; expected any of "

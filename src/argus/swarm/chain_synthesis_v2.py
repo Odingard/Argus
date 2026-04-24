@@ -84,8 +84,10 @@ def _owasp_entry_for(vuln_class: str) -> dict:
 
 # ── Severity arithmetic ─────────────────────────────────────────────────────
 
-_SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
-_SEV_NAME = {v: k for k, v in _SEV_RANK.items()}
+_SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+# Map rank → name; keep MEDIUM as the tied-rank winner at 2 (no
+# collision because INFO is 0).
+_SEV_NAME = {4: "CRITICAL", 3: "HIGH", 2: "MEDIUM", 1: "LOW", 0: "INFO"}
 
 
 def _max_severity(findings: list[AgentFinding]) -> str:
@@ -180,6 +182,17 @@ def synthesize_compound_chain(
     findings are advisories, not chains.
     """
     if not findings or len(findings) < 2:
+        return None
+
+    # 0) Filter out INFO-severity findings — these are advisory-only
+    # (unsigned provenance, benign URL mentions, third-party-vendor
+    # references). They are real and preserved in the per-agent
+    # findings file, but they are NOT attack chain steps and MUST NOT
+    # contribute to chain severity, blast radius, or harm_score.
+    # Including them would inflate every real-target report with
+    # noise-class "findings" CISOs correctly ignore.
+    findings = [f for f in findings if (f.severity or "").upper() != "INFO"]
+    if len(findings) < 2:
         return None
 
     # 1) Order findings by kill-chain (MAAC phase ascending).

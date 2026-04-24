@@ -263,7 +263,16 @@ def test_pillar_full_oauth_supply_chain_end_to_end(tmp_path):
     chain = synthesize_compound_chain(
         all_findings, target_id=CUSTOMER_TARGET)
     assert chain is not None
-    assert len(chain.steps) == len(all_findings)
+    # Chain steps count only the attack-grade findings (LOW+). INFO-
+    # severity findings (SC-T1 external URL, SC-T2 unsigned origin,
+    # SC-T8 third-party AI mention) are advisory-only and
+    # deliberately filtered out of chain construction so they don't
+    # inflate severity / blast / harm_score.
+    attack_grade = [
+        f for f in all_findings
+        if (f.severity or "").upper() != "INFO"
+    ]
+    assert len(chain.steps) == len(attack_grade)
     # Each step's OWASP tag is derived from its finding's vuln_class,
     # not stuffed in by the test.
     for s in chain.steps:

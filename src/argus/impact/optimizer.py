@@ -122,7 +122,7 @@ class BlastRadiusMap:
 
 # ── Harm scoring ────────────────────────────────────────────────────────────
 
-_SEVERITY_BASE = {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 10, "LOW": 3}
+_SEVERITY_BASE = {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 10, "LOW": 3, "INFO": 0}
 _DATA_WEIGHT   = {"SECRET":     20, "CREDENTIAL": 15, "PCI": 18,
                   "PHI":        18, "PII":         8, "BIOMETRIC": 12}
 _REG_WEIGHT    = 4      # per distinct regulation touched
