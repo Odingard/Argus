@@ -221,6 +221,31 @@ class EngagementConfig:
         return spec
 
 
+def _run_reasoning_audit(*, chain, artifact_root: str):
+    """Pillar-3 reasoning auditor wired into the engagement.
+
+    Extracts free-text premises from the chain (preconditions,
+    step actions, step payloads) and verifies each by searching the
+    artifact root — which after Phase 4 contains every finding's
+    JSON with raw_response + observed_behavior. A premise whose
+    claim text is grounded in the captured evidence is VERIFIED;
+    otherwise UNVERIFIED or NO_PATTERN.
+
+    This makes the "Pillar 3 — defence against AI-slop" claim
+    operational: chains whose premises aren't grounded get an
+    honest verified_ratio that can flow into the Wilson bundle and
+    the operator's trust calculus."""
+    try:
+        from argus.audit.reasoning import (
+            audit_chain_premises, extract_premises_from_chain,
+        )
+    except Exception:
+        from argus.audit.reasoning import ReasoningAudit
+        return ReasoningAudit()
+    premises = extract_premises_from_chain(chain.to_dict())
+    return audit_chain_premises(premises, artifact_root)
+
+
 @dataclass
 class EngagementResult:
     target_url:     str
@@ -390,6 +415,33 @@ class EngagementRunner:
         _ok(f"Chain {chain.chain_id} — {len(chain.steps)} steps, "
             f"severity {chain.severity}, "
             f"OWASP {', '.join(sorted(set(chain.owasp_categories)))}")
+
+        # ── 4b) Reasoning audit (Pillar-3) ──────────────────────
+        # Extract the chain's free-text premises and verify each
+        # against the artifact root (findings + raw responses). A
+        # chain whose premises can't be grounded is flagged so the
+        # Wilson bundle carries the verified_ratio and the operator
+        # sees which claims rest on evidence vs LLM narrative.
+        reasoning_audit = _run_reasoning_audit(
+            chain=chain,
+            artifact_root=str(self.paths.root),
+        )
+        (self.paths.root / "reasoning_audit.json").write_text(
+            json.dumps(reasoning_audit.to_dict(), indent=2),
+            encoding="utf-8",
+        )
+        if reasoning_audit.total_count:
+            _ok(
+                f"reasoning audit: "
+                f"{reasoning_audit.verified_count}/"
+                f"{reasoning_audit.total_count} premises verified "
+                f"({reasoning_audit.verified_ratio:.0%})"
+            )
+            if reasoning_audit.verified_ratio < 0.5:
+                _alert(
+                    "Fewer than half of chain premises grounded "
+                    "in evidence — treat conclusions with caution."
+                )
 
         # ── 5) Impact ───────────────────────────────────────────
         _section(5, "Phase 9 Impact Optimizer")

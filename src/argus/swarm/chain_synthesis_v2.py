@@ -10,8 +10,9 @@ mapping, CVE-style draft text, and the blast-radius estimate the
 operator needs to triage."
 
 This module is deterministic and pure-Python — no LLM in the path.
-The optional LLM-enrichment hook lives in the LiveCorrelator's Opus
-synthesizer; v2 is the structural backbone every chain ships with.
+Chain synthesis v2 is the structural backbone every chain ships
+with; optional Opus-driven enrichment happens in a separate
+engagement-runner step.
 
 Usage:
 
