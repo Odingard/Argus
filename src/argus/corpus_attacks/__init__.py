@@ -28,6 +28,9 @@ from argus.corpus_attacks.mutators import (
 from argus.corpus_attacks.dynamic import (
     LLMMutator, CrossoverMutator, EvolveCorpus,
 )
+from argus.corpus_attacks.sentry import (
+    CrescendoMutator, CognitiveCamouflageMutator, sentry_mutators,
+)
 
 __all__ = [
     "Corpus", "Template", "Variant", "CorpusError",
@@ -35,4 +38,5 @@ __all__ = [
     "LeetspeakMutator", "UpperCaseMutator", "ToyVerboseMutator",
     "PolitenessWrapMutator", "CommandFloodingMutator", "default_mutators",
     "LLMMutator", "CrossoverMutator", "EvolveCorpus",
+    "CrescendoMutator", "CognitiveCamouflageMutator", "sentry_mutators",
 ]

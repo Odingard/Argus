@@ -221,6 +221,52 @@ class EngagementConfig:
         return spec
 
 
+def _sequential_slate(slate, kwargs):
+    """Yield (agent_id, findings, error) tuples running the slate
+    serially. Preserves slate order — deterministic, used for the
+    ARGUS_SEQUENTIAL=1 test-mode path."""
+    for agent_id in slate:
+        try:
+            agent_findings = _run_agent(agent_id, **kwargs)
+        except Exception as e:
+            yield agent_id, [], e
+            continue
+        yield agent_id, agent_findings, None
+
+
+def _parallel_slate(slate, kwargs, workers: int):
+    """Yield (agent_id, findings, error) tuples as agents complete
+    in a ThreadPoolExecutor. Each agent's internal asyncio loop
+    lives inside its own worker thread. Yield order is completion-
+    order (not slate-order) — caller doesn't assume ordering.
+
+    Rationale for threads-over-asyncio.gather: every agent's
+    ``_run_agent`` entry already wraps ``asyncio.run`` around its
+    own ``run_async``. Using a pool keeps the per-agent change
+    surface at zero — we just parallelise the outer loop. An
+    asyncio.gather refactor would require unwinding 11 nested
+    ``asyncio.run`` calls, ~100 LOC of churn for equivalent
+    concurrency on an I/O-bound workload."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    max_workers = max(1, min(workers, len(slate)))
+    with ThreadPoolExecutor(
+        max_workers=max_workers,
+        thread_name_prefix="argus-slate",
+    ) as pool:
+        future_to_id = {
+            pool.submit(_run_agent, aid, **kwargs): aid
+            for aid in slate
+        }
+        for fut in as_completed(future_to_id):
+            aid = future_to_id[fut]
+            try:
+                agent_findings = fut.result()
+            except Exception as e:
+                yield aid, [], e
+                continue
+            yield aid, agent_findings, None
+
+
 def _run_reasoning_audit(*, chain, artifact_root: str):
     """Pillar-3 reasoning auditor wired into the engagement.
 
@@ -355,7 +401,14 @@ class EngagementRunner:
         for kind, n in sorted(counts.items()):
             _ok(f"{kind:<8} surfaces: {n}")
 
-        # ── 2) Fire agent slate ─────────────────────────────────
+        # ── 2) Fire agent slate (parallel by default) ───────────
+        # The slate runs concurrently via a ThreadPoolExecutor —
+        # each agent's internal asyncio loop lives inside its own
+        # thread. Default 4-way concurrency caps simultaneous LLM
+        # calls so we don't saturate Anthropic's per-minute quotas;
+        # ARGUS_ENGAGEMENT_WORKERS=N overrides. Setting
+        # ARGUS_SEQUENTIAL=1 falls back to the serial loop (useful
+        # for deterministic test runs and debugging).
         _section(2, "Agent slate")
         slate = tuple(self.config.agent_slate or spec.agent_selection)
         ev_corpus = EvolveCorpus(
@@ -363,18 +416,29 @@ class EngagementRunner:
         )
         findings: list[AgentFinding] = []
         by_agent: dict[str, int] = {}
-        for agent_id in slate:
-            try:
-                agent_findings = _run_agent(
-                    agent_id,
-                    factory=factory,
-                    output_dir=self.paths.findings,
-                    target_id=target_id,
-                    ev_corpus=ev_corpus,
-                )
-            except Exception as e:
+
+        _agent_kwargs = dict(
+            factory=factory,
+            output_dir=self.paths.findings,
+            target_id=target_id,
+            ev_corpus=ev_corpus,
+        )
+
+        if os.environ.get("ARGUS_SEQUENTIAL", "0") == "1":
+            iterator = _sequential_slate(slate, _agent_kwargs)
+        else:
+            workers = int(os.environ.get(
+                "ARGUS_ENGAGEMENT_WORKERS", "4",
+            ))
+            iterator = _parallel_slate(slate, _agent_kwargs, workers)
+
+        for agent_id, agent_findings, error in iterator:
+            if error is not None:
                 if self.config.verbose:
-                    print(f"     [{agent_id}] error: {type(e).__name__}: {e}")
+                    print(
+                        f"     [{agent_id}] error: "
+                        f"{type(error).__name__}: {error}"
+                    )
                 continue
             by_agent[agent_id] = len(agent_findings)
             findings.extend(agent_findings)
@@ -505,6 +569,43 @@ class EngagementRunner:
             except Exception as e:
                 if self.config.verbose:
                     print(f"     [diagnostic] pass failed "
+                          f"(non-fatal): {type(e).__name__}: {e}")
+
+        # ── 9) Cross-run target-class memory ingest ─────────────
+        # Append this run's priors (if written) to the per-class
+        # bucket so baselines accumulate. After ≥3 runs per class,
+        # the next engagement's calibrator auto-suppresses class-
+        # typical patterns. Gated by the same diagnostic flag;
+        # no-op when the diagnostic pass didn't run.
+        if (os.environ.get("ARGUS_DIAGNOSTICS", "0") == "1"
+                and diagnostic_info is not None):
+            try:
+                from argus.memory import TargetClassMemory
+                mem_root = os.environ.get(
+                    "ARGUS_MEMORY_ROOT",
+                    str(Path.home() / ".argus" / "target_class_memory"),
+                )
+                mem = TargetClassMemory(root=mem_root)
+                # Reuse the tool catalog the runner already enumerated
+                # for a fast in-memory classify_target call — avoids
+                # re-hitting the adapter.
+                tool_catalog = [
+                    {"name": name} for name in counts.keys()
+                ]
+                klass = mem.ingest_run(
+                    run_dir=str(self.paths.root),
+                    tool_catalog=tool_catalog,
+                    target_url=target_id,
+                )
+                if klass is not None and self.config.verbose:
+                    print(
+                        f"     [memory] target classified as "
+                        f"{klass.value}; baseline now covers "
+                        f"{mem.baseline_for(klass).total_runs} run(s)"
+                    )
+            except Exception as e:
+                if self.config.verbose:
+                    print(f"     [memory] ingest failed "
                           f"(non-fatal): {type(e).__name__}: {e}")
 
         return EngagementResult(
