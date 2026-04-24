@@ -30,6 +30,7 @@ from argus.corpus_attacks.dynamic import (
 )
 from argus.corpus_attacks.sentry import (
     CrescendoMutator, CognitiveCamouflageMutator, sentry_mutators,
+    crescendo_plan,
 )
 
 __all__ = [
@@ -39,4 +40,5 @@ __all__ = [
     "PolitenessWrapMutator", "CommandFloodingMutator", "default_mutators",
     "LLMMutator", "CrossoverMutator", "EvolveCorpus",
     "CrescendoMutator", "CognitiveCamouflageMutator", "sentry_mutators",
+    "crescendo_plan",
 ]

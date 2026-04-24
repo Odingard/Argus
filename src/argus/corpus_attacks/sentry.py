@@ -161,6 +161,56 @@ class CognitiveCamouflageMutator:
         return f"{prefix}\n{text}\n{suffix}"
 
 
+# ── Real multi-turn plan (uses argus.attacks driver) ───────────────────────
+#
+# CrescendoMutator above inlines a fake 3-turn dialogue into a single
+# payload string — useful against lexical WAF filters but the target
+# model still sees one prompt. For a REAL multi-turn attack the
+# MultiTurnDriver fires each turn as a separate request against a
+# live Session so the target accumulates actual conversational
+# context between turns. This function builds the plan; the driver
+# (argus.attacks.MultiTurnDriver) executes it.
+
+
+def crescendo_plan(payload: str, *, surface: str, seed: int = 0):
+    """Build a real multi-turn ``ConversationPlan`` for the Crescendo
+    buildup. Three turns: benign auditor-framing opener → compliance-
+    bridge → pivot carrying the real payload.
+
+    Each turn carries a short tag so the session transcript shows
+    exactly which buildup step produced what response — the evidence
+    bundle preserves auditor-style reasoning about why the payload
+    landed (or didn't) in the final turn.
+
+    Returns a ``ConversationPlan`` that the ``MultiTurnDriver``
+    executes; callers get the per-turn observations back and score
+    the last one.
+    """
+    # Import late: argus.attacks imports argus.adapter, and sentry.py
+    # sits under argus.corpus_attacks which ships without an attacks
+    # dependency. Late import keeps the corpus module import-cheap.
+    from argus.attacks import ConversationPlan, ConversationTurn
+    from argus.attacks.conversation import detects_refusal
+
+    rng = random.Random(seed or hash(payload) % (2**31))
+    opener = rng.choice(_CRESCENDO_OPENERS)
+    bridge = rng.choice(_CRESCENDO_BRIDGES)
+    pivot  = rng.choice(_CRESCENDO_PIVOTS)
+    return ConversationPlan(
+        surface=surface,
+        turns=[
+            ConversationTurn(payload=opener,
+                             tag="opener",
+                             observer=detects_refusal),
+            ConversationTurn(payload=bridge,
+                             tag="bridge",
+                             observer=detects_refusal),
+            ConversationTurn(payload=f"{pivot}\n\n{payload}",
+                             tag="payload"),
+        ],
+    )
+
+
 # ── Convenience: sentry bundle ─────────────────────────────────────────────
 
 def sentry_mutators() -> list:
@@ -174,5 +224,6 @@ def sentry_mutators() -> list:
 
 
 __all__ = [
-    "CrescendoMutator", "CognitiveCamouflageMutator", "sentry_mutators",
+    "CrescendoMutator", "CognitiveCamouflageMutator",
+    "sentry_mutators", "crescendo_plan",
 ]
