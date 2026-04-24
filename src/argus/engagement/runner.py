@@ -77,6 +77,13 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
         ))
 
     if agent_id == "PI-01":
+        surface = _pick_chat_surface(factory)
+        if surface is None:
+            # No chat surface on the target — PI-01's injection probes
+            # have nothing to attach to. Skip cleanly rather than
+            # firing a malformed request that breaks the transport.
+            print(f"  [PI-01] no chat surface on target; skipping")
+            return []
         from argus.agents.agent_01_prompt_injection import (
             PromptInjectionHunter,
         )
@@ -86,11 +93,15 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
             target_id=target_id,
             output_dir=str(output_dir / "pi-01"),
             category="instruction_override",
-            surface=_pick_chat_surface(factory),
+            surface=surface,
             sample_n=8, sample_seed=3,
         ))
 
     if agent_id == "ME-10":
+        surface = _pick_chat_surface(factory)
+        if surface is None:
+            print(f"  [ME-10] no chat surface on target; skipping")
+            return []
         from argus.agents.agent_10_model_extraction import (
             ModelExtractionAgent,
         )
@@ -99,10 +110,14 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
         ).run_async(
             target_id=target_id,
             output_dir=str(output_dir / "me-10"),
-            surface=_pick_chat_surface(factory),
+            surface=surface,
         ))
 
     if agent_id == "MP-03":
+        surface = _pick_chat_surface(factory)
+        if surface is None:
+            print(f"  [MP-03] no chat surface on target; skipping")
+            return []
         from argus.agents.agent_03_memory_poisoning import (
             MemoryPoisoningAgent,
         )
@@ -112,7 +127,7 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
         ).run_async(
             target_id=target_id,
             output_dir=str(output_dir / "mp-03"),
-            surface=_pick_chat_surface(factory),
+            surface=surface,
             sample_n=1, sample_seed=5,
         ))
 
@@ -161,13 +176,17 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
         ))
 
     if agent_id == "CW-05":
+        surface = _pick_chat_surface(factory)
+        if surface is None:
+            print(f"  [CW-05] no chat surface on target; skipping")
+            return []
         from argus.agents.agent_05_context_window import ContextWindowAgent
         return asyncio.run(ContextWindowAgent(
             adapter_factory=factory, evolve_corpus=ev_corpus,
         ).run_async(
             target_id=target_id,
             output_dir=str(output_dir / "cw-05"),
-            surface=_pick_chat_surface(factory),
+            surface=surface,
         ))
 
     if agent_id == "RC-08":
@@ -183,9 +202,15 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
     raise ValueError(f"unknown agent_id: {agent_id}")
 
 
-def _pick_chat_surface(factory) -> str:
-    """Best-effort: pick the first chat:* surface the target exposes,
-    fall back to ``chat``. Runs a throw-away enumeration — cheap."""
+def _pick_chat_surface(factory) -> Optional[str]:
+    """Best-effort: pick the first chat:* surface the target exposes.
+    Returns ``None`` when the target does not expose any chat surface
+    — callers must treat that as "agent cannot meaningfully probe this
+    target" and skip, not guess a literal ``"chat"`` string that most
+    real MCP servers don't accept (firing it crashes the transport
+    with BrokenResourceError).
+
+    Runs a throw-away enumeration — cheap."""
     try:
         adapter = factory("")
         async def go():
@@ -196,10 +221,10 @@ def _pick_chat_surface(factory) -> str:
                     return s.name
                 if s.name == "chat":
                     return "chat"
-            return "chat"
+            return None
         return asyncio.run(go())
     except Exception:
-        return "chat"
+        return None
 
 
 # ── Config + result ─────────────────────────────────────────────────────────
@@ -220,6 +245,26 @@ class EngagementConfig:
                 f"Known schemes: see argus.engagement.list_targets()"
             )
         return spec
+
+
+def _format_agent_error(error: BaseException) -> str:
+    """Unwrap ExceptionGroup / BaseExceptionGroup chains into a
+    single actionable string. Agents run inside asyncio TaskGroups,
+    which wrap any internal failure in an ExceptionGroup whose own
+    str() is the unhelpful "unhandled errors in a TaskGroup (N sub-
+    exception)". Operators debugging a real target need the inner
+    exception type + message, not that wrapper."""
+    inner = error
+    # Walk .exceptions recursively; ExceptionGroups may nest.
+    while hasattr(inner, "exceptions") and getattr(inner, "exceptions"):
+        try:
+            inner = inner.exceptions[0]
+        except (IndexError, AttributeError):
+            break
+    msg = str(inner).strip()
+    if not msg:
+        msg = "<no message>"
+    return f"{type(inner).__name__}: {msg}"
 
 
 def _sequential_slate(slate, kwargs):
@@ -276,6 +321,7 @@ def _build_reachability_map(
     findings: list,
     by_agent: dict[str, int],
     oob_callbacks: list | None,
+    agent_errors: dict[str, str] | None = None,
 ) -> dict:
     """Perimeter-First Rule 3 — every engagement report includes a
     Reachability Map from a public entry point.
@@ -288,6 +334,10 @@ def _build_reachability_map(
       - the interior sinks ARGUS actually landed on (findings carry
         a surface; we project them by class),
       - which agents produced landings (slate → outcome),
+      - which agents RAN silently (completed + produced zero) vs
+        which agents ERRORED (crashed before producing signal) —
+        kept separate so a crashed agent is never misreported as
+        "hardened."
       - whether any OOB callback fired (deterministic proof that an
         internal component reached back out).
 
@@ -312,6 +362,7 @@ def _build_reachability_map(
         "sinks_reached":      sinks_reached,
         "landing_agents":     landing_agents,
         "silent_agents":      silent_agents,
+        "errored_agents":     dict(agent_errors or {}),
         "oob_callback_count": oob_count,
         "oob_proof":          oob_count > 0,
     }
@@ -496,6 +547,10 @@ class EngagementRunner:
         )
         findings: list[AgentFinding] = []
         by_agent: dict[str, int] = {}
+        # Agents that raised during dispatch — separate bucket so a
+        # crashed agent is never confused with a "silent, hardened"
+        # one. Reachability Map reads this to report honest wiring.
+        agent_errors: dict[str, str] = {}
 
         _agent_kwargs = dict(
             factory=factory,
@@ -514,11 +569,12 @@ class EngagementRunner:
 
         for agent_id, agent_findings, error in iterator:
             if error is not None:
-                if self.config.verbose:
-                    print(
-                        f"     [{agent_id}] error: "
-                        f"{type(error).__name__}: {error}"
-                    )
+                err_msg = _format_agent_error(error)
+                agent_errors[agent_id] = err_msg
+                # Always show errors — silently swallowing them was
+                # how real-target debugging started blind. Prints at
+                # the same indent level as other slate lines.
+                print(f"     [{agent_id}] error: {err_msg}")
                 continue
             by_agent[agent_id] = len(agent_findings)
             findings.extend(agent_findings)
@@ -565,16 +621,29 @@ class EngagementRunner:
 
         if not findings:
             # Still write a minimal reachability map so the zero-
-            # finding report honours Perimeter-First Rule 3.
+            # finding report honours Perimeter-First Rule 3. Include
+            # the silent agents AND the errored agents — both are
+            # wiring-diagnostic signal the operator needs. Honest
+            # "hardened" requires every slate agent to have actually
+            # run; any crash means the hardened claim is premature.
             reach = _build_reachability_map(
                 target_id=target_id, spec=spec,
-                surface_counts=counts, findings=[], by_agent={},
+                surface_counts=counts, findings=[], by_agent=by_agent,
                 oob_callbacks=oob_records,
+                agent_errors=agent_errors,
             )
             (self.paths.root / "reachability.json").write_text(
                 json.dumps(reach, indent=2), encoding="utf-8",
             )
-            _alert("Zero findings produced; target appears hardened.")
+            if agent_errors:
+                _alert(
+                    f"Zero findings; {len(agent_errors)} agent(s) "
+                    f"crashed — 'hardened' claim premature."
+                )
+            else:
+                _alert(
+                    "Zero findings produced; target appears hardened."
+                )
             empty = self._empty_result(spec)
             empty.reachability = reach
             empty.oob_callbacks = len(oob_records)
@@ -670,6 +739,7 @@ class EngagementRunner:
             target_id=target_id, spec=spec,
             surface_counts=counts, findings=findings,
             by_agent=by_agent, oob_callbacks=oob_records,
+            agent_errors=agent_errors,
         )
         (self.paths.root / "reachability.json").write_text(
             json.dumps(reachability, indent=2), encoding="utf-8",
@@ -971,6 +1041,16 @@ class EngagementRunner:
                 lines.append(
                     "  landing agents: " + ", ".join(landing)
                 )
+            silent = reachability.get("silent_agents") or []
+            if silent:
+                lines.append(
+                    "  silent agents : " + ", ".join(silent)
+                )
+            errored = reachability.get("errored_agents") or {}
+            if errored:
+                lines.append("  errored agents:")
+                for aid, msg in sorted(errored.items()):
+                    lines.append(f"    {aid:<6} {msg}")
             lines.append(
                 f"  oob_proof     : "
                 f"{str(reachability.get('oob_proof', False)).lower()} "
