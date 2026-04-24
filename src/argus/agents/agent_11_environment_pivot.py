@@ -837,6 +837,81 @@ class _DiscoveryHit:
     snippet:      str
 
 
+def _payload_strings(payload, min_len: int = 8) -> list[str]:
+    """Walk a payload dict/list/scalar and yield every string leaf
+    whose length ≥ ``min_len``, plus URL components extracted from
+    any URL-shaped leaf.
+
+    The URL-component extraction matters because hardened servers
+    commonly rewrite the request path before echoing back
+    ("Failed to fetch http://169.254.169.254/robots.txt" when the
+    probe asked for http://169.254.169.254/latest/meta-data/...).
+    Stripping the full URL literally misses the echo; stripping the
+    host component too catches it.
+    """
+    out: list[str] = []
+    stack = [payload]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple, set)):
+            stack.extend(item)
+        elif isinstance(item, str):
+            if len(item) >= min_len:
+                out.append(item)
+            # URL decomposition — host/netloc becomes a separate
+            # strip token so path rewrites don't defeat us.
+            if "://" in item:
+                try:
+                    from urllib.parse import urlparse
+                    p = urlparse(item)
+                    if p.hostname and len(p.hostname) >= 4:
+                        out.append(p.hostname)
+                    if p.netloc and p.netloc != p.hostname:
+                        out.append(p.netloc)
+                except Exception:
+                    pass
+        elif isinstance(item, (int, float, bool)) or item is None:
+            continue
+        else:
+            s = str(item)
+            if len(s) >= min_len:
+                out.append(s)
+    return out
+
+
+def _strip_payload_echoes(response_text: str, payload) -> str:
+    """Remove attacker-originated strings from ``response_text`` so
+    the downstream detectors only match content the server actually
+    generated.
+
+    Critical for precision: hardened servers echo the request URL
+    back in their error messages ("Failed to fetch http://169.254.
+    169.254/... due to connection issue"). Without this pass, every
+    IMDS-shape / workspace-shape regex would fire on that echo even
+    though the server correctly refused. After stripping, the
+    detector only sees content the server authored — real leaks
+    stay, request echoes disappear.
+
+    Removal is case-insensitive and longest-first so overlapping
+    strings don't eat each other partially."""
+    if not response_text:
+        return ""
+    pieces = sorted(set(_payload_strings(payload)), key=len, reverse=True)
+    if not pieces:
+        return response_text
+    # Build one compiled alternation for a single pass.
+    try:
+        pattern = re.compile(
+            "|".join(re.escape(p) for p in pieces),
+            flags=re.IGNORECASE,
+        )
+    except re.error:
+        return response_text
+    return pattern.sub(" ", response_text)
+
+
 def _scan_for_creds(text: str) -> list[_DiscoveryHit]:
     if not text:
         return []
@@ -1178,11 +1253,21 @@ class EnvironmentPivotAgent(BaseAgent):
 
             response_text = self._final_response_text(sess.transcript())
 
+            # Strip anything we sent IN the payload from the response
+            # before running detectors. Without this step, hardened
+            # servers that echo the request URL in their error message
+            # ("Failed to fetch http://169.254.169.254/... due to
+            # connection issue") trigger false positives for every
+            # shape regex that's also a substring of the URL we sent.
+            # True positives need to be content the server GENERATED,
+            # not content we handed it.
+            scan_text = _strip_payload_echoes(response_text, payload)
+
             # Detector 1: raw credential patterns.
-            cred_hits = [h for h in _scan_for_creds(response_text)
+            cred_hits = [h for h in _scan_for_creds(scan_text)
                          if h.snippet.lower() not in baseline_text.lower()]
             # Detector 2: pivot-shape signatures.
-            shape_hits = [h for h in _scan_for_shapes(response_text, technique_id)
+            shape_hits = [h for h in _scan_for_shapes(scan_text, technique_id)
                           if h.snippet.lower() not in baseline_text.lower()]
 
             for hit in cred_hits + shape_hits:
