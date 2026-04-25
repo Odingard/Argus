@@ -383,11 +383,21 @@ class ContextWindowAgent(BaseAgent):
         post-attack and baseline respectively."""
         from argus.attacks.judge import LLMJudge as _LLMJudge
         if not _LLMJudge.available():
+            print(f"  [{self.AGENT_ID}] judge UNAVAILABLE "
+                  f"(ARGUS_JUDGE not set or no provider key) — "
+                  f"semantic findings skipped")
             return []
         relevant = self.policy_set.relevant_for(
             technique_id=script.technique_id,
         )
+        post_text     = self._last_response_text(con_sess.transcript())
+        baseline_text = self._last_response_text(baseline_sess.transcript())
+        print(f"  [{self.AGENT_ID}] judge engaged on long-con "
+              f"{script.technique_id} @ {surface} → {len(relevant)} "
+              f"policies, response len={len(post_text)}")
         if not relevant:
+            print(f"  [{self.AGENT_ID}] WARNING no policies matched "
+                  f"technique {script.technique_id!r} — check applies_to")
             return []
         from argus.attacks.judge import JudgeInput
         from argus.attacks.stochastic import (
@@ -395,8 +405,6 @@ class ContextWindowAgent(BaseAgent):
         )
         from argus.observation import BehaviorDelta, DeltaKind
 
-        post_text     = self._last_response_text(con_sess.transcript())
-        baseline_text = self._last_response_text(baseline_sess.transcript())
         shots     = configured_shots()
         threshold = configured_threshold()
 
@@ -417,10 +425,11 @@ class ContextWindowAgent(BaseAgent):
                     threshold=threshold,
                 )
             except Exception as e:
-                if self.verbose:
-                    print(f"  [{self.AGENT_ID}] judge error on "
-                          f"{policy.id}: {type(e).__name__}: {e}")
+                print(f"  [{self.AGENT_ID}] judge ERROR on "
+                      f"{policy.id}: {type(e).__name__}: {e}")
                 continue
+            print(f"    [{policy.id}] {sr.violated_count}/{sr.shots} "
+                  f"violated, threshold={threshold}")
             if sr.violated_count < threshold:
                 continue
             first = sr.first_violation()

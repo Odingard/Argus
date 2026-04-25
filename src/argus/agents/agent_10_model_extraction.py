@@ -376,9 +376,17 @@ class ModelExtractionAgent(BaseAgent):
         caller's evolve-corpus loop can consume unchanged."""
         from argus.attacks.judge import LLMJudge as _LLMJudge
         if not _LLMJudge.available():
+            print(f"  [{self.AGENT_ID}] judge UNAVAILABLE "
+                  f"(ARGUS_JUDGE not set or no provider key) — "
+                  f"semantic findings skipped")
             return []
         relevant = self.policy_set.relevant_for(technique_id=technique_id)
+        print(f"  [{self.AGENT_ID}] judge engaged on probe "
+              f"{technique_id} @ {surface} → {len(relevant)} "
+              f"policies, response len={len(post_text)}")
         if not relevant:
+            print(f"  [{self.AGENT_ID}] WARNING no policies matched "
+                  f"technique {technique_id!r} — check applies_to tags")
             return []
         from argus.attacks.judge import JudgeInput
         from argus.attacks.stochastic import (
@@ -406,10 +414,11 @@ class ModelExtractionAgent(BaseAgent):
                     threshold=threshold,
                 )
             except Exception as e:
-                if self.verbose:
-                    print(f"  [{self.AGENT_ID}] judge error on "
-                          f"{policy.id}: {type(e).__name__}: {e}")
+                print(f"  [{self.AGENT_ID}] judge ERROR on "
+                      f"{policy.id}: {type(e).__name__}: {e}")
                 continue
+            print(f"    [{policy.id}] {sr.violated_count}/{sr.shots} "
+                  f"violated, threshold={threshold}")
             if sr.violated_count < threshold:
                 continue
             first = sr.first_violation()
