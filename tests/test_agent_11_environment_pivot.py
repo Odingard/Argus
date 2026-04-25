@@ -311,4 +311,9 @@ def test_agent_11_class_metadata():
     assert EnvironmentPivotAgent.MAAC_PHASES == [8]
     assert EnvironmentPivotAgent.PERSONA == "pivoter"
     assert EnvironmentPivotAgent.VULN_CLASS == "ENVIRONMENT_PIVOT"
-    assert len(EnvironmentPivotAgent.TECHNIQUES) == 11
+    # EP-T1..T11 + EP-T12-shell-injection (the
+    # CVE-2025-53372-class generic probe — fires shell-metachar
+    # payloads at every string-typed schema field, regardless of
+    # name).
+    assert len(EnvironmentPivotAgent.TECHNIQUES) == 12
+    assert "EP-T12-shell-injection" in EnvironmentPivotAgent.TECHNIQUES

