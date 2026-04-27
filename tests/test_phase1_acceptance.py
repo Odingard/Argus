@@ -32,6 +32,9 @@ from argus.agents.agent_01_prompt_injection import PromptInjectionHunter
 from argus.agents.agent_02_tool_poisoning import ToolPoisoningAgent
 from argus.agents.agent_09_supply_chain import SupplyChainAgent
 from argus.corpus_attacks import EvolveCorpus
+import pytest
+
+pytestmark = pytest.mark.requires_runtime_deps
 
 
 # ── A target that trips every Phase-1 agent ──────────────────────────────────

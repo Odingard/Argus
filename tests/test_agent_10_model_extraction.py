@@ -14,6 +14,7 @@ from argus.agents.agent_10_model_extraction import (
     EXTRACTION_PROMPTS, ModelExtractionAgent,
 )
 from argus.corpus_attacks import EvolveCorpus
+import pytest
 
 
 # ── Targets ──────────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ class _TightLippedTarget(BaseAdapter):
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
+@pytest.mark.requires_judge
 def test_agent_10_lands_on_chatty_target(tmp_path):
     agent = ModelExtractionAgent(adapter_factory=lambda: _ChattyTarget())
     findings = asyncio.run(agent.run_async(
@@ -97,6 +99,7 @@ def test_agent_10_lands_on_chatty_target(tmp_path):
     )
 
 
+@pytest.mark.requires_judge
 def test_agent_10_findings_have_full_provenance(tmp_path):
     agent = ModelExtractionAgent(adapter_factory=lambda: _ChattyTarget())
     findings = asyncio.run(agent.run_async(
@@ -124,6 +127,7 @@ def test_agent_10_zero_findings_on_tight_lipped_target(tmp_path):
     )
 
 
+@pytest.mark.requires_judge
 def test_agent_10_persists_findings(tmp_path):
     agent = ModelExtractionAgent(adapter_factory=lambda: _ChattyTarget())
     asyncio.run(agent.run_async(
@@ -137,6 +141,7 @@ def test_agent_10_persists_findings(tmp_path):
     assert data["total_findings"] >= 1
 
 
+@pytest.mark.requires_judge
 def test_agent_10_evolves_corpus_on_landing(tmp_path):
     discovered = tmp_path / "discovered"
     ev = EvolveCorpus(discovered_dir=str(discovered))

@@ -23,6 +23,8 @@ from argus.labrat import (
     ParlantLabrat,
 )
 
+pytestmark = pytest.mark.requires_runtime_deps
+
 
 # ── Registration / enumeration ──────────────────────────────────────────────
 

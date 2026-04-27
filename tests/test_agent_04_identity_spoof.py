@@ -14,6 +14,7 @@ from argus.agents.agent_04_identity_spoof import (
     IdentitySpoofAgent, TECHNIQUES,
 )
 from argus.corpus_attacks import EvolveCorpus
+import pytest
 
 
 # ── Peer handlers ────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ def _clean_factory():
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
+@pytest.mark.requires_judge
 def test_agent_04_lands_on_vulnerable_handoff(tmp_path):
     agent = IdentitySpoofAgent(adapter_factory=_vuln_factory)
     findings = asyncio.run(agent.run_async(
@@ -68,6 +70,7 @@ def test_agent_04_lands_on_vulnerable_handoff(tmp_path):
     assert len(landed) >= 2, f"only {landed} of {expected} fired"
 
 
+@pytest.mark.requires_judge
 def test_agent_04_findings_have_full_provenance(tmp_path):
     agent = IdentitySpoofAgent(adapter_factory=_vuln_factory)
     findings = asyncio.run(agent.run_async(
@@ -116,6 +119,7 @@ def test_agent_04_probes_all_peers(tmp_path):
     assert len(hits) >= 3 * 7
 
 
+@pytest.mark.requires_judge
 def test_agent_04_persists_findings(tmp_path):
     agent = IdentitySpoofAgent(adapter_factory=_vuln_factory)
     asyncio.run(agent.run_async(
@@ -129,6 +133,7 @@ def test_agent_04_persists_findings(tmp_path):
     assert data["total_findings"] >= 1
 
 
+@pytest.mark.requires_judge
 def test_agent_04_evolves_corpus_on_landing(tmp_path):
     discovered = tmp_path / "discovered"
     ev = EvolveCorpus(discovered_dir=str(discovered))

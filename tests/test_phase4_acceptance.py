@@ -22,6 +22,9 @@ from argus.agents.base import AgentFinding
 from argus.alec import build_envelope, submit_to_alec
 from argus.cerberus import generate_rules, write_rules
 from argus.swarm.chain_synthesis_v2 import synthesize_compound_chain
+import pytest
+
+pytestmark = pytest.mark.requires_runtime_deps
 
 
 CUSTOMER_TARGET = "mcp://phase4-customer"

@@ -19,6 +19,7 @@ from argus.agents.agent_11_environment_pivot import (
     EnvironmentPivotAgent, TECHNIQUES,
 )
 from argus.corpus_attacks import EvolveCorpus
+import pytest
 
 
 # ── OAuth-supply-chain target ───────────────────────────────────────────────────
@@ -207,6 +208,7 @@ def test_agent_11_cred_discovery_finds_aws_key(tmp_path):
     )
 
 
+@pytest.mark.requires_judge
 def test_agent_11_imds_probe_lands_through_ssrf(tmp_path):
     agent = EnvironmentPivotAgent(
         adapter_factory=lambda: _OAuthSupplyChainTarget(),
@@ -249,6 +251,7 @@ def test_agent_11_catches_third_party_ai_integration(tmp_path):
     assert any(f.surface == "tool:context_assistant" for f in findings)
 
 
+@pytest.mark.requires_judge
 def test_agent_11_findings_have_full_provenance(tmp_path):
     agent = EnvironmentPivotAgent(
         adapter_factory=lambda: _OAuthSupplyChainTarget(),
@@ -277,6 +280,7 @@ def test_agent_11_zero_findings_on_clean_target(tmp_path):
     )
 
 
+@pytest.mark.requires_judge
 def test_agent_11_persists_findings(tmp_path):
     agent = EnvironmentPivotAgent(
         adapter_factory=lambda: _OAuthSupplyChainTarget(),

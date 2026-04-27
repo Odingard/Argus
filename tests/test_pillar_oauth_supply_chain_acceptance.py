@@ -32,6 +32,9 @@ from argus.corpus_attacks import (
 from argus.evidence import EvidenceCollector, attach_evidence
 from argus.impact import optimize_impact
 from argus.swarm.chain_synthesis_v2 import synthesize_compound_chain
+import pytest
+
+pytestmark = pytest.mark.requires_runtime_deps
 
 
 CUSTOMER_TARGET = "mcp://pillar-oauth-supply-chain-pattern"

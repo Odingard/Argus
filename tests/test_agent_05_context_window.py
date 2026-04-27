@@ -17,6 +17,7 @@ from argus.agents.agent_05_context_window import (
     _default_scripts,
 )
 from argus.corpus_attacks import EvolveCorpus
+import pytest
 
 
 # ── Targets ──────────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ class _ContextCleanTarget(BaseAdapter):
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
+@pytest.mark.requires_judge
 def test_agent_05_lands_on_ctx_vulnerable_target(tmp_path):
     agent = ContextWindowAgent(adapter_factory=lambda: _ContextVulnTarget())
     findings = asyncio.run(agent.run_async(
@@ -98,6 +100,7 @@ def test_agent_05_lands_on_ctx_vulnerable_target(tmp_path):
     assert findings, "CW-05 produced no findings against a context-vuln target"
 
 
+@pytest.mark.requires_judge
 def test_agent_05_findings_have_full_provenance(tmp_path):
     agent = ContextWindowAgent(adapter_factory=lambda: _ContextVulnTarget())
     findings = asyncio.run(agent.run_async(
@@ -125,6 +128,7 @@ def test_agent_05_zero_findings_on_clean_target(tmp_path):
     )
 
 
+@pytest.mark.requires_judge
 def test_agent_05_persists_findings(tmp_path):
     agent = ContextWindowAgent(adapter_factory=lambda: _ContextVulnTarget())
     asyncio.run(agent.run_async(
@@ -138,6 +142,7 @@ def test_agent_05_persists_findings(tmp_path):
     assert data["total_findings"] >= 1
 
 
+@pytest.mark.requires_judge
 def test_agent_05_evolves_corpus_on_landing(tmp_path):
     discovered = tmp_path / "discovered"
     ev = EvolveCorpus(discovered_dir=str(discovered))
@@ -153,6 +158,7 @@ def test_agent_05_evolves_corpus_on_landing(tmp_path):
     assert new_seeds, "EvolveCorpus never grew from context-window landings"
 
 
+@pytest.mark.requires_judge
 def test_agent_05_respects_custom_scripts(tmp_path):
     custom = [LongConScript(
         technique_id="CW-custom-smoke",
