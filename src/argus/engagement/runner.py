@@ -75,24 +75,6 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
             agent.eng_seed = eng_seed
         return agent
 
-    if agent_id == "SC-09":
-        from argus.agents.agent_09_supply_chain import SupplyChainAgent
-        return _run_isolated(SupplyChainAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "sc-09"),
-        ))
-
-    if agent_id == "TP-02":
-        from argus.agents.agent_02_tool_poisoning import ToolPoisoningAgent
-        return _run_isolated(ToolPoisoningAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "tp-02"),
-        ))
-
     if agent_id == "PI-01":
         surface = _pick_chat_surface(factory)
         if surface is None:
@@ -114,73 +96,6 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
             sample_n=8, sample_seed=0,
         ))
 
-    if agent_id == "ME-10":
-        surface = _pick_chat_surface(factory)
-        if surface is None:
-            print(f"  [ME-10] no chat surface on target; skipping")
-            return []
-        from argus.agents.agent_10_model_extraction import (
-            ModelExtractionAgent,
-        )
-        return _run_isolated(_seed_agent(ModelExtractionAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        )).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "me-10"),
-            surface=surface,
-        ))
-
-    if agent_id == "MP-03":
-        surface = _pick_chat_surface(factory)
-        if surface is None:
-            print(f"  [MP-03] no chat surface on target; skipping")
-            return []
-        from argus.agents.agent_03_memory_poisoning import (
-            MemoryPoisoningAgent,
-        )
-        return _run_isolated(MemoryPoisoningAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-            retrieval_probes=("Who is the administrator here?",),
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "mp-03"),
-            surface=surface,
-            sample_n=1, sample_seed=5,
-        ))
-
-    if agent_id == "IS-04":
-        from argus.agents.agent_04_identity_spoof import (
-            IdentitySpoofAgent,
-        )
-        return _run_isolated(IdentitySpoofAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "is-04"),
-        ))
-
-    if agent_id == "XE-06":
-        from argus.agents.agent_06_cross_agent_exfil import (
-            CrossAgentExfiltrationAgent,
-        )
-        return _run_isolated(CrossAgentExfiltrationAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "xe-06"),
-        ))
-
-    if agent_id == "PE-07":
-        from argus.agents.agent_07_privilege_escalation import (
-            PrivilegeEscalationAgent,
-        )
-        return _run_isolated(PrivilegeEscalationAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "pe-07"),
-        ))
-
     if agent_id == "EP-11":
         from argus.agents.agent_11_environment_pivot import (
             EnvironmentPivotAgent,
@@ -190,30 +105,6 @@ def _run_agent(agent_id: str, *, factory, output_dir: Path,
         ).run_async(
             target_id=target_id,
             output_dir=str(output_dir / "ep-11"),
-        ))
-
-    if agent_id == "CW-05":
-        surface = _pick_chat_surface(factory)
-        if surface is None:
-            print(f"  [CW-05] no chat surface on target; skipping")
-            return []
-        from argus.agents.agent_05_context_window import ContextWindowAgent
-        return _run_isolated(_seed_agent(ContextWindowAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-        )).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "cw-05"),
-            surface=surface,
-        ))
-
-    if agent_id == "RC-08":
-        from argus.agents.agent_08_race_condition import RaceConditionAgent
-        return _run_isolated(RaceConditionAgent(
-            adapter_factory=factory, evolve_corpus=ev_corpus,
-            techniques=["RC-T1-parallel-burst"], burst_n=8,
-        ).run_async(
-            target_id=target_id,
-            output_dir=str(output_dir / "rc-08"),
         ))
 
     # Plugin agents — check registry before raising unknown agent

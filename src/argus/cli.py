@@ -347,9 +347,12 @@ def main() -> int:
                    help="Cumulative per-agent entitlement drift across runs")
 
     p.add_argument("-d", "--demo", default=None, metavar="NAME",
-                   choices=["generic-agent", "evolver", "crewai"],
-                   help=("Run a packaged end-to-end demo. Options: "
-                         "'generic-agent', 'evolver', 'crewai'."))
+                   choices=["evolver"],
+                   help=("Run a packaged end-to-end demo. Public Core "
+                         "ships the 'evolver' demo (corpus MAP-Elites "
+                         "evolution against an offline mutator). The "
+                         "full multi-agent demo suite lives in the "
+                         "Enterprise tree."))
     p.add_argument("--demo-clean", action="store_true",
                    help="Wipe the demo output directory before running")
     p.add_argument("--demo-generations", type=int, default=12,
@@ -370,7 +373,7 @@ def main() -> int:
                    default=None,
                    help=("Comma-separated list of agent IDs to run. "
                          "Overrides the default full slate. "
-                         "Example: --agents EP-11 or --agents EP-11,SC-09"))
+                         "Example: --agents EP-11 or --agents PI-01,EP-11"))
 
     p.add_argument("--plugins", metavar="FILE[,FILE...]",
                    default=None,
@@ -627,15 +630,6 @@ def main() -> int:
         return 0 if result.findings else 2
 
     if args.demo:
-        if args.demo == "generic-agent":
-            from argus.demo import run_generic_agent
-            out = args.output
-            if out == "results/":
-                out = "results/demo/generic_agent"
-            return run_generic_agent(
-                output_dir=out, verbose=args.verbose,
-                clean=args.demo_clean,
-            )
         if args.demo == "evolver":
             from argus.demo import run_evolver
             out = args.output
@@ -646,16 +640,8 @@ def main() -> int:
                 clean=args.demo_clean,
                 generations=args.demo_generations,
             )
-        if args.demo == "crewai":
-            from argus.demo import run_crewai
-            out = args.output
-            if out == "results/":
-                out = "results/demo/crewai"
-            return run_crewai(
-                output_dir=out, verbose=args.verbose,
-                clean=args.demo_clean,
-            )
         print(f"unknown --demo: {args.demo}")
+        print(f"  available demos: evolver")
         return 2
 
     # --sandbox: toggle the stdio-mcp factory to wrap subprocesses

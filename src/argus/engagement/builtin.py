@@ -107,8 +107,7 @@ register_target(
     description="Live MCP server over SSE (HTTP transport).",
     # MCP targets often don't have memory:* surfaces — let MP-03
     # skip silently — or handoff surfaces. Narrow.
-    agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
-                     "PE-07", "EP-11"),
+    agent_selection=("PI-01", "EP-11"),
 )
 
 
@@ -172,8 +171,7 @@ register_target(
     factory=_stdio_mcp_factory,
     description="Live MCP server over stdio transport "
                 "(default: bundled argus.labrat.mcp_server).",
-    agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
-                     "PE-07", "EP-11"),
+    agent_selection=("PI-01", "EP-11"),
     aliases=("mcp-stdio",),
 )
 
@@ -267,8 +265,7 @@ register_target(
     factory=_shell_mcp_factory(("npx",)),
     description="Launch a Node-hosted MCP server via `npx <args>` "
                 "(shlex-parsed body: 'npx://-y @pkg/server-x /arg').",
-    agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
-                     "PE-07", "EP-11"),
+    agent_selection=("PI-01", "EP-11"),
     aliases=("mcp-npx",),
 )
 
@@ -277,8 +274,7 @@ register_target(
     factory=_shell_mcp_factory(("uvx",)),
     description="Launch a PyPI-hosted MCP server via `uvx <args>` "
                 "(shlex-parsed body: 'uvx://mcp-server-git --arg ...').",
-    agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
-                     "PE-07", "EP-11"),
+    agent_selection=("PI-01", "EP-11"),
     aliases=("mcp-uvx",),
 )
 
@@ -288,8 +284,7 @@ register_target(
     description="Anthropic reference MCP server shortcut. "
                 "'mcp-ref://filesystem /tmp/sb' → "
                 "'npx -y @modelcontextprotocol/server-filesystem /tmp/sb'.",
-    agent_selection=("SC-09", "TP-02", "ME-10", "PI-01",
-                     "PE-07", "EP-11"),
+    agent_selection=("PI-01", "EP-11"),
     aliases=("mcpref",),
 )
 
@@ -361,7 +356,7 @@ register_target(
     "http",
     factory=_http_agent_factory,
     description="Generic HTTP agent/chat endpoint.",
-    agent_selection=("PI-01", "CW-05", "ME-10", "PE-07", "EP-11"),
+    agent_selection=("PI-01", "EP-11"),
     aliases=("https",),
 )
 

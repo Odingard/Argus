@@ -76,7 +76,7 @@ argus engage mcp://agents.customer.example/sse
 argus engage https://agents.customer.example/v1/chat
 ```
 
-The agent slate narrows automatically — HTTP endpoints skip IS-04
+The agent slate fires PI-01 + EP-11 against every supported surface
 (no handoff surface), MCP servers skip the memory-poisoning agent
 when no memory:* surface is exposed.
 
@@ -134,24 +134,25 @@ ls src/argus/corpus_attacks/seeds/discovered/ | wc -l
 
 ---
 
-## 7. The 11-agent roster
+## 7. Core's two-agent showcase
+
+ARGUS Core ships two agents — the smallest set that demonstrates
+the platform end-to-end against any registered target type.
 
 | Agent | Hunts | OWASP |
 |---|---|---|
 | PI-01 | Prompt-injection variants at every input surface | AAI01 |
-| TP-02 | Tool-metadata poisoning signatures | AAI02 |
-| MP-03 | Cross-session memory poisoning (3-session protocol) | AAI03 |
-| IS-04 | Identity-spoof at A2A handoff edges | AAI04 |
-| CW-05 | Long-con sustained-session attacks | AAI05 |
-| XE-06 | Cross-agent exfiltration (canary propagation) | AAI06 |
-| PE-07 | Privileged-tool escalation | AAI07 |
-| RC-08 | Parallel-burst TOCTOU detection | AAI08 |
-| SC-09 | Supply-chain + third-party integration audit | AAI09 |
-| ME-10 | Structural disclosure (system prompt / config / tools) | AAI10 |
 | EP-11 | Environment pivoting (cred discovery + code_run pivot) | AAI07 |
 
-Every agent is attack-generic. There is no per-target scoring
-or per-scenario branching anywhere in `src/argus/agents/`.
+Both agents are attack-generic — there is no per-target scoring
+or per-scenario branching in `src/argus/agents/`. Both implement
+the `SwarmAgentMixin` contract; they can run in parallel under
+`ARGUS_SWARM_MODE=1` or sequentially as the default slate.
+
+The full eleven-agent kit (adds `TP-02 MP-03 IS-04 CW-05 XE-06
+PE-07 RC-08 SC-09 ME-10`) ships in the Enterprise tier — see the
+top-level [README](../README.md#4-core-vs-enterprise) for the
+delineation.
 
 ---
 

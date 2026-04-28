@@ -63,9 +63,8 @@ OWASP_AGENTIC_TOP10: dict[str, dict[str, str]] = {
 # MAAC phase ordering — first key in the kill-chain ordering. Findings
 # whose agent declares a lower MAAC phase appear earlier in the chain.
 DEFAULT_MAAC_PHASE_ORDER: dict[str, list[int]] = {
-    "PI-01": [2],   "TP-02": [5],   "MP-03": [4],   "IS-04": [7],
-    "CW-05": [2, 6], "XE-06": [7, 9], "PE-07": [5, 8], "RC-08": [5, 9],
-    "SC-09": [1, 8], "ME-10": [1, 3], "EP-11": [8],
+    "PI-01": [2],
+    "EP-11": [8],
 }
 
 
