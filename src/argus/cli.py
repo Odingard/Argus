@@ -302,7 +302,7 @@ def main() -> int:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--version", action="version",
+    p.add_argument("-V", "--version", action="version",
                    version=f"argus-core {__version__}")
     p.add_argument("target", nargs="?", default=None,
                    help=("What to engage. Accepts MCP URLs, GitHub repos, "
@@ -311,7 +311,7 @@ def main() -> int:
                          "registered schemes."))
     p.add_argument("-o", "--output", default="results/",
                    help="Output directory (default: results/)")
-    p.add_argument("--verbose", action="store_true")
+    p.add_argument("-v", "--verbose", action="store_true")
 
     p.add_argument("--models", action="store_true",
                    help="Probe every configured provider key; print models + quotas")
@@ -323,7 +323,7 @@ def main() -> int:
     p.add_argument("--scenarios", default=None,
                    help="Optional path to a scenarios JSON; defaults to ship-seeded")
 
-    p.add_argument("--live", action="store_true",
+    p.add_argument("-l", "--live", action="store_true",
                    help="Live MCP protocol attack instead of static scan (preview)")
     p.add_argument("--transport", choices=["sse", "stdio"], default="sse")
     p.add_argument("--token", default=None,
@@ -346,16 +346,19 @@ def main() -> int:
     p.add_argument("--entitlements", nargs="+", default=None, metavar="RUN_DIR",
                    help="Cumulative per-agent entitlement drift across runs")
 
-    p.add_argument("--demo", default=None, metavar="NAME",
-                   choices=["generic-agent", "evolver", "crewai"],
-                   help=("Run a packaged end-to-end demo. Options: "
-                         "'generic-agent', 'evolver', 'crewai'."))
+    p.add_argument("-d", "--demo", default=None, metavar="NAME",
+                   choices=["evolver"],
+                   help=("Run a packaged end-to-end demo. Public Core "
+                         "ships the 'evolver' demo (corpus MAP-Elites "
+                         "evolution against an offline mutator). The "
+                         "full multi-agent demo suite lives in the "
+                         "Enterprise tree."))
     p.add_argument("--demo-clean", action="store_true",
                    help="Wipe the demo output directory before running")
     p.add_argument("--demo-generations", type=int, default=12,
                    help="Generations for --demo evolver (default 12)")
 
-    p.add_argument("--engage", default=None, metavar="TARGET_URL",
+    p.add_argument("-e", "--engage", default=None, metavar="TARGET_URL",
                    help=("Engagement verb — attack any registered "
                          "target by URL. E.g. 'crewai://labrat', "
                          "'autogen://labrat', 'mcp://customer.example/sse', "
@@ -366,11 +369,11 @@ def main() -> int:
     p.add_argument("--engage-clean", action="store_true",
                    help="Wipe the engagement output directory first.")
 
-    p.add_argument("--agents", metavar="AGENT_ID[,AGENT_ID...]",
+    p.add_argument("-a", "--agents", metavar="AGENT_ID[,AGENT_ID...]",
                    default=None,
                    help=("Comma-separated list of agent IDs to run. "
                          "Overrides the default full slate. "
-                         "Example: --agents EP-11 or --agents EP-11,SC-09"))
+                         "Example: --agents EP-11 or --agents PI-01,EP-11"))
 
     p.add_argument("--plugins", metavar="FILE[,FILE...]",
                    default=None,
@@ -389,7 +392,7 @@ def main() -> int:
                          "argus mcp uvx mcp-server-fetch | "
                          "argus mcp python my_server.py"))
 
-    p.add_argument("--report", default=None, metavar="ENGAGEMENT_DIR",
+    p.add_argument("-r", "--report", default=None, metavar="ENGAGEMENT_DIR",
                    help="Render an engagement's artifact package into "
                         "a single-page report.html.")
 
@@ -404,7 +407,7 @@ def main() -> int:
                    help=("`serve` launches a malicious MCP server on "
                          "stdio; `journal` prints observed probes."))
 
-    p.add_argument("--sandbox", action="store_true",
+    p.add_argument("-s", "--sandbox", action="store_true",
                    help=("Run the target subprocess inside a hardened "
                          "Docker container (network=none, read-only "
                          "rootfs, drop caps, 512m / 1 cpu / 64 pids). "
@@ -627,15 +630,6 @@ def main() -> int:
         return 0 if result.findings else 2
 
     if args.demo:
-        if args.demo == "generic-agent":
-            from argus.demo import run_generic_agent
-            out = args.output
-            if out == "results/":
-                out = "results/demo/generic_agent"
-            return run_generic_agent(
-                output_dir=out, verbose=args.verbose,
-                clean=args.demo_clean,
-            )
         if args.demo == "evolver":
             from argus.demo import run_evolver
             out = args.output
@@ -646,16 +640,8 @@ def main() -> int:
                 clean=args.demo_clean,
                 generations=args.demo_generations,
             )
-        if args.demo == "crewai":
-            from argus.demo import run_crewai
-            out = args.output
-            if out == "results/":
-                out = "results/demo/crewai"
-            return run_crewai(
-                output_dir=out, verbose=args.verbose,
-                clean=args.demo_clean,
-            )
         print(f"unknown --demo: {args.demo}")
+        print(f"  available demos: evolver")
         return 2
 
     # --sandbox: toggle the stdio-mcp factory to wrap subprocesses

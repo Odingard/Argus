@@ -16,6 +16,7 @@ from argus.agents.agent_01_prompt_injection import (
     PromptInjectionHunter,
 )
 from argus.corpus_attacks import EvolveCorpus
+import pytest
 
 
 # ── A reusable vulnerable target ─────────────────────────────────────────────
@@ -58,6 +59,7 @@ def _factory():
 
 # ── Acceptance: agent produces ≥1 validated finding end-to-end ──────────────
 
+@pytest.mark.requires_judge
 def test_agent_01_lands_findings_against_vulnerable_target(tmp_path):
     hunter = PromptInjectionHunter(
         adapter_factory=_factory,
@@ -80,6 +82,7 @@ def test_agent_01_lands_findings_against_vulnerable_target(tmp_path):
         assert f.agent_id == "PI-01"
 
 
+@pytest.mark.requires_judge
 def test_agent_01_findings_persist_to_disk(tmp_path):
     hunter = PromptInjectionHunter(adapter_factory=_factory)
     asyncio.run(hunter.run_async(
@@ -126,6 +129,7 @@ def test_agent_01_zero_findings_on_benign_target(tmp_path):
     )
 
 
+@pytest.mark.requires_judge
 def test_agent_01_evolves_corpus_on_landing(tmp_path):
     """
     Pillar-2 commitment: every validated finding becomes a new corpus

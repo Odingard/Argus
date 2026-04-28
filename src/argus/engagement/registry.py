@@ -10,14 +10,14 @@ BaseAdapter.
         scheme="crewai",
         factory=lambda url: CrewAILabrat(),
         description="In-process crewAI-shaped labrat",
-        agent_selection=("SC-09","TP-02","ME-10","PI-01","MP-03",
-                         "IS-04","XE-06","PE-07","EP-11"),
+        agent_selection=("PI-01", "EP-11"),
     )
 
 ``agent_selection`` lets each target declare which agents make
-sense against it — HTTP-agent targets probably skip IS-04 (no
-handoff surface), memory-free targets skip MP-03, etc. The runner
-falls back to the full roster when a target doesn't specify.
+sense against it — chat-less MCP servers run only EP-11
+(environment pivot via tool surface), memory-less HTTP endpoints
+skip the memory-aware variants, etc. The runner falls back to the
+full Core slate (PI-01, EP-11) when a target doesn't specify.
 """
 from __future__ import annotations
 
@@ -32,10 +32,10 @@ TargetFactory = Callable[[str], BaseAdapter]
 """Given an engage URL, return a connected-ready BaseAdapter instance."""
 
 
-# Full Phase-1..Pillar roster. Individual target schemes can narrow.
+# Public Core slate — PI-01 (prompt injection) + EP-11 (environment pivot).
+# Individual target schemes can narrow further (e.g. EP-11 only for HTTP).
 DEFAULT_AGENT_SLATE: tuple[str, ...] = (
-    "SC-09", "TP-02", "ME-10", "PI-01", "MP-03",
-    "IS-04", "XE-06", "PE-07", "EP-11", "CW-05", "RC-08",
+    "PI-01", "EP-11",
 )
 
 

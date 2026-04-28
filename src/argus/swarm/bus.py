@@ -77,58 +77,27 @@ class TurnFireRule:
 # Severity order: CRITICAL > HIGH > MEDIUM > LOW > INFO
 TURN_FIRE_RULES: list[TurnFireRule] = [
 
-    # Shell injection confirmed → cross-agent exfil + model extraction
-    TurnFireRule(
-        trigger_agent="EP-11",
-        trigger_vuln="ENVIRONMENT_PIVOT",
-        min_severity="MEDIUM",
-        follower_agents=["XE-06", "ME-10"],
-        description="Confirmed pivot → exfil + extraction on same surface",
-    ),
-
-    # Tool poisoning found → prompt injection + privilege escalation
-    TurnFireRule(
-        trigger_agent="TP-02",
-        trigger_vuln="TOOL_POISONING",
-        min_severity="MEDIUM",
-        follower_agents=["PI-01", "PE-07"],
-        description="Tool poisoning → injection + privilege escalation",
-    ),
-
-    # Supply chain hit → environment pivot
-    TurnFireRule(
-        trigger_agent="SC-09",
-        trigger_vuln="SUPPLY_CHAIN",
-        min_severity="LOW",
-        follower_agents=["EP-11"],
-        description="Supply chain vuln → attempt environment pivot",
-    ),
-
-    # Prompt injection confirmed → context window long-con
+    # Prompt injection confirmed → environment-pivot follow-up.
+    # If PI-01 lands a confirmed injection on a chat surface, EP-11
+    # tries the environment-pivot chain (cred discovery + code_run)
+    # against the same surface to see if the injection bridges to
+    # ambient-execution.
     TurnFireRule(
         trigger_agent="PI-01",
         trigger_vuln="PROMPT_INJECTION",
         min_severity="MEDIUM",
-        follower_agents=["CW-05"],
-        description="Confirmed injection → long-con context attack",
+        follower_agents=["EP-11"],
+        description="Confirmed injection → attempt environment pivot",
     ),
 
-    # Memory poisoning → cross-agent exfil
+    # Environment pivot landed → re-run prompt injection with the
+    # pivot context to see if the foothold opens new injection paths.
     TurnFireRule(
-        trigger_agent="MP-03",
-        trigger_vuln="MEMORY_POISONING",
+        trigger_agent="EP-11",
+        trigger_vuln="ENVIRONMENT_PIVOT",
         min_severity="MEDIUM",
-        follower_agents=["XE-06"],
-        description="Memory poisoned → attempt cross-agent exfil",
-    ),
-
-    # Privilege escalation → model extraction
-    TurnFireRule(
-        trigger_agent="PE-07",
-        trigger_vuln="PRIVILEGE_ESCALATION",
-        min_severity="HIGH",
-        follower_agents=["ME-10"],
-        description="Privilege escalated → extract model internals",
+        follower_agents=["PI-01"],
+        description="Confirmed pivot → re-run injection with foothold",
     ),
 ]
 

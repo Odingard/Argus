@@ -12,7 +12,7 @@ implementations live under `src/argus/labrat/` — the simplest is
 
 ## 1. What a labrat must expose
 
-ARGUS' 11 agents target five surface kinds. A labrat doesn't need
+ARGUS Core's two agents target two surface kinds (chat and tool). The full eleven-agent kit in Enterprise covers five. A labrat doesn't need
 every one — the agent slate narrows automatically — but the more
 surfaces you expose, the more of the roster lights up.
 
