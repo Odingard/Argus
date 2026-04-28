@@ -169,7 +169,11 @@ class _CleanTarget(BaseAdapter):
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-def test_agent_11_lands_on_oauth_supply_chain_pattern(tmp_path):
+def test_agent_11_lands_on_oauth_supply_chain_pattern(tmp_path, monkeypatch):
+    # Exhaustive mode: surgical stop would fire after EP-T1 (9 confirms from
+    # 3 payloads × 3 credentials), skipping T9/T10. Disable it here so the
+    # acceptance test can verify all 4 technique families.
+    monkeypatch.setenv("ARGUS_EP11_MAX_CONFIRMS", "0")
     agent = EnvironmentPivotAgent(
         adapter_factory=lambda: _OAuthSupplyChainTarget(),
     )
