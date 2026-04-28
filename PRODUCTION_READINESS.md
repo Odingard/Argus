@@ -306,3 +306,81 @@ focused work. Distributable across multiple sessions.
 
 *Phase A complete. Findings inventoried. Ready to discuss Phase B
 priority and execute fixes you've signed off on.*
+
+---
+
+## 11. Closeout (post-reframe: "Core is Core")
+
+After this document was first drafted, the operator (Andre) clarified:
+
+> "remember its core, its not supposed to have all the features. why
+> dont you inspect what it is and mimic it"
+
+This invalidates several Phase B items I had ranked as "missing
+features". Core is **deliberately** the OSS subset. Pro features stay
+in `src/argus/pro/` behind `argus.license.require()`. The job is not
+"build more features in Core" — it is **make the public Core surface
+match its README, fix any lies, and leave the deliberate scope
+boundaries alone.**
+
+### What changed in priority
+
+The **only valid Phase B work** against Core is:
+
+1. ✅ **Done** — README agent table corrected: was 12 (with phantoms
+   `OD-06`, `MC-15`, typo `PI-02`); now 11 matching the actual
+   `agent_*.py` files. "Coordinated 12-agent swarm runtime" → "11-agent
+   slate runtime" — accurate. (`docs/GETTING_STARTED.md` and
+   `docs/ADDING_A_LABRAT.md` were already correct; only README
+   diverged.)
+2. ✅ **Already done** — CLI short aliases (Phase A commit `33f1a0e`).
+3. ❓ **Verify** — `argus mcp://...`, `argus github.com/...`,
+   `argus @scope/pkg`, `argus ./local.py`, `argus crewai://labrat`
+   each work end-to-end as the README claims. Inspection-level
+   confirmed: scheme dispatch is real, smart-dispatch handles bare
+   URLs / npm packages / local files. Live runtime verification
+   deferred to engagement work.
+
+### What's NOT Phase B (per the reframe)
+
+- **F-SANDBOX-1: generalize sandbox to in-process Python adapters.**
+  This was ranked #1 in the original Phase B backlog. It IS still real
+  and IS still the right architectural answer for the 4 upcoming
+  engagements — but **it's not a Core completeness gap.** Core
+  already advertises stdio sandboxing and delivers it. In-process
+  Python sandbox is a **new feature**, not a fix. It belongs in
+  internal engagement tooling or a Pro module, depending on whether
+  Core users would benefit. Defer the architectural decision.
+
+- **Swarm-migrate 9 legacy agents.** Speedup, not correctness. Core
+  README accurately says "slate runtime, sequential" — no public claim
+  about 12-agent swarm parallel execution to break. Defer.
+
+- **Reproducibility test (re-execute saved finding).** Internal
+  quality bar, not a Core advertisement. Defer.
+
+- **Production audit of 9 legacy agents.** Internal engagement quality
+  bar, not a Core advertisement. Defer.
+
+- **Adapter timeout audit.** Internal quality bar. Defer.
+
+- **F-PyPI-1 README repositioning.** Decision made: keep public PyPI
+  as-is. ARGUS exists publicly, stars are growing, the listing is the
+  signal that the project is real. README accuracy is what mattered.
+
+### What this means for the 4 upcoming engagements
+
+The 4 engagements (Agentic AI surfaces + 4 MCPs) run through the
+**internal** engagement workflow. ARGUS Core is the platform; the
+engagement-specific tooling (sandbox generalization, validator gates,
+finding reproducibility tests) lives in operator scripts and possibly
+in `src/argus/pro/`. **None of that work belongs in Core's public
+surface.**
+
+The path from here:
+- Engagement 1-4 work happens in operator-side tooling + Pro modules
+- Core stays MIT, stays minimal, stays accurate-to-README
+- When something in operator-side tooling stabilises and would benefit
+  Core users, it gets promoted up
+
+This document is now closed. Phase A complete + reframe applied.

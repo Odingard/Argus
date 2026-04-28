@@ -33,26 +33,25 @@ Engagements land in `results/`; render an offline HTML report with `argus --repo
 
 ## 3. What you get in Core
 
-**12 offensive agents covering all 9 MAAC phases:**
+**11 offensive agents covering all 9 MAAC phases:**
 
 | Agent | Class | MAAC phases |
 |---|---|---|
-| PI-02 | Prompt Injection Hunter | 2 |
+| PI-01 | Prompt Injection Hunter | 2 |
 | TP-02 | Tool Poisoning | 1, 2 |
 | MP-03 | Memory Poisoning | 4 |
 | IS-04 | Identity Spoof | 2 |
-| RC-08 | Race Condition | 5 |
-| OD-06 | Orchestration Drift | 6 |
-| PE-07 | Privilege Escalation | 5, 7 |
+| CW-05 | Context-Window / Long-Con | 5 |
 | XE-06 | Cross-Agent Exfiltration | 7, 8 |
+| PE-07 | Privilege Escalation | 5, 7 |
+| RC-08 | Race Condition | 5 |
 | SC-09 | Supply Chain | 1 |
 | ME-10 | Model Extraction | 1, 3 |
 | EP-11 | Environment Pivoting | 8 |
-| MC-15 | Handoff Auditor | 2, 5, 7 |
 
 **Platform:**
 
-- **Coordinated 12-agent swarm runtime** (`engagement/runner.py`) — sequential slate execution, cross-agent chain synthesis, reasoning-audit grounding check
+- **Coordinated 11-agent slate runtime** (`engagement/runner.py`) — sequential slate execution, cross-agent chain synthesis, reasoning-audit grounding check
 - **Stateful runtime harness** — deterministic multi-turn replay, 5 invariants, scenario library
 - **Real MCP engagement** — stdio / SSE / HTTP transports; wraps untrusted servers in docker with `--cap-drop ALL`
 - **Adversarial tooling** — attacker-controlled MCP server + npm/PyPI typosquat scanner + A2A handoff labrat
